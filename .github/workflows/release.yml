@@ -26,6 +26,10 @@ jobs:
         with:
           node-version: 22.14.0
           registry-url: https://registry.npmjs.org
+      - name: Upgrade npm for trusted publishing
+        run: npm install --global npm@11.7.0
+      - name: Verify release toolchain
+        run: npm --version
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
