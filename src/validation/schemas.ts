@@ -85,6 +85,24 @@ export const smsBulkMessageSchema = z
 	})
 	.loose();
 
+export const smsIrMessageSchema = z
+	.object({
+		recipient: nonBlankStringSchema,
+		message: nonBlankStringSchema,
+		sendAt: sendAtSchema.optional(),
+		signal: abortSignalSchema.optional(),
+	})
+	.strict();
+
+export const smsIrBulkMessageSchema = z
+	.object({
+		recipients: z.array(nonBlankStringSchema).min(1),
+		message: nonBlankStringSchema,
+		sendAt: sendAtSchema.optional(),
+		signal: abortSignalSchema.optional(),
+	})
+	.strict();
+
 export const smsBatchMessageSchema = z
 	.object({
 		recipient: nonBlankStringSchema,
@@ -95,6 +113,14 @@ export const smsBatchMessageSchema = z
 		signal: abortSignalSchema.optional(),
 	})
 	.loose();
+
+export const kavenegarSendArrayMessageSchema = z
+	.object({
+		recipient: nonBlankStringSchema,
+		message: nonBlankStringSchema,
+		sender: nonBlankStringSchema.optional(),
+	})
+	.strict();
 
 export const signalOptionsSchema = z
 	.object({ signal: abortSignalSchema.optional() })

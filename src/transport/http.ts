@@ -18,7 +18,6 @@ export type RetryPolicy = Readonly<{
 
 export type RequestOptions = Readonly<{
 	signal?: AbortSignal;
-	requestTimeoutMs?: number;
 }>;
 
 const RETRYABLE_STATUS_CODES = new Set([408, 425, 429]);
@@ -79,10 +78,7 @@ export class SmsHttpTransport {
 		options: RequestOptions,
 	): Promise<Response> {
 		const controller = new AbortController();
-		const timeout = setTimeout(
-			() => controller.abort(),
-			options.requestTimeoutMs ?? this.timeoutMs,
-		);
+		const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 		const externalAbort = () => controller.abort();
 		if (options.signal?.aborted) controller.abort();
 		options.signal?.addEventListener("abort", externalAbort, { once: true });

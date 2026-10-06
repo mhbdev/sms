@@ -48,8 +48,10 @@ describe("SmsIrProvider", () => {
 	});
 
 	it("supports reports and scheduled cancellation", async () => {
-		const fetcher: SmsHttpFetcher = async (input) => {
+		const requests: Array<{ url: string; method: string }> = [];
+		const fetcher: SmsHttpFetcher = async (input, init) => {
 			const url = String(input);
+			requests.push({ url, method: init?.method ?? "GET" });
 			if (url.includes("scheduled"))
 				return response({
 					status: 1,
@@ -81,6 +83,32 @@ describe("SmsIrProvider", () => {
 		expect((await provider.listPacks())[0]?.packId).toBe("pack-1");
 		expect((await provider.getPack("pack-1"))[0]?.messageId).toBe("1");
 		expect((await provider.cancelScheduled("pack-1")).returnedCredit).toBe(2);
+		expect((await provider.cancelScheduledPack("pack-1")).batchId).toBe("pack-1");
+		expect(requests.at(-1)?.method).toBe("DELETE");
+	});
+
+	it("rejects Kavenegar-only raw fields", async () => {
+		const fetcher: SmsHttpFetcher = async () => response({});
+		const provider = new SmsIrProvider({
+			apiKey: "secret-key",
+			lineNumber: "3000",
+			fetcher,
+		});
+
+		await expect(
+			provider.sendMessage({
+				recipient: "0912",
+				message: "test",
+				sender: "1000",
+			} as never),
+		).rejects.toThrow('Unrecognized key: "sender"');
+		await expect(
+			provider.sendBulk({
+				recipients: ["0912"],
+				message: "test",
+				sender: "1000",
+			} as never),
+		).rejects.toThrow('Unrecognized key: "sender"');
 	});
 
 	it("rejects provider failures and invalid template IDs", async () => {

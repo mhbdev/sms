@@ -74,6 +74,10 @@ await sms.sendTemplate({
 });
 ```
 
+SMS.ir raw and bulk contracts intentionally do not expose `sender`, `localId`,
+or `tag`; SMS.ir uses the configured `lineNumber` and rejects unsupported fields
+at runtime instead of silently ignoring them.
+
 ## Capability surface
 
 Both adapters expose raw sending, provider-specific template sending, and the
@@ -81,6 +85,10 @@ provider's delivery/reporting operations. Kavenegar additionally exposes
 send-array, scheduled-message cancellation, status-by-local-id, inbox, and
 inbox-count operations. SMS.ir additionally exposes like-to-like delivery,
 scheduled-pack cancellation, message status, and pack reports.
+
+The capability contracts are generic so provider-specific request and result
+types remain precise. Use `SmsMessageScheduler` for message-ID cancellation and
+`SmsPackScheduler` for providers that cancel a provider-managed scheduled pack.
 
 Use provider-specific types when a capability is not shared by both services. The
 root import keeps the existing `@dordoone/sms` contract names available for

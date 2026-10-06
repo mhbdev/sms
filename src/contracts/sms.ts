@@ -82,6 +82,10 @@ export type SmsCancellationResult = Readonly<{
 	returnedCredit?: number;
 }>;
 
+export type SmsMessageCancellationRequest = Readonly<{
+	ids: readonly (string | number)[];
+}>;
+
 export type SmsReceivedMessage = Readonly<{
 	messageId: string;
 	message: string;
@@ -90,16 +94,23 @@ export type SmsReceivedMessage = Readonly<{
 	date?: number;
 }>;
 
-export type SmsPage<T> = Readonly<{
+export type SmsCollection<T> = Readonly<{
 	items: readonly T[];
-	pageNumber?: number;
-	pageSize?: number;
 }>;
 
+export type SmsPage<T> = SmsCollection<T> &
+	Readonly<{
+		pageNumber?: number;
+		pageSize?: number;
+	}>;
+
 /** Capability for providers that send raw SMS messages. */
-export interface SmsMessageSender {
+export interface SmsMessageSender<
+	TMessage = SmsMessage,
+	TResult extends SmsSendResult = SmsSendResult,
+> {
 	readonly name: string;
-	sendMessage(message: SmsMessage): Promise<SmsSendResult>;
+	sendMessage(message: TMessage): Promise<TResult>;
 }
 
 /** Capability for providers that send provider-managed template messages. */
@@ -130,8 +141,20 @@ export interface SmsDeliveryStatusReader<
 /** Capability for providers that can cancel scheduled messages or batches. */
 export interface SmsScheduler<TCancellation = SmsCancellationResult> {
 	cancelScheduled(
-		input: Readonly<{ ids: readonly (string | number)[] }>,
+		input: SmsMessageCancellationRequest,
 	): Promise<readonly TCancellation[]>;
+}
+
+/** Capability for providers that cancel scheduled messages by message ID. */
+export interface SmsMessageScheduler<TCancellation = SmsCancellationResult>
+	extends SmsScheduler<TCancellation> {}
+
+/** Capability for providers that cancel a provider-managed scheduled pack. */
+export interface SmsPackScheduler<TCancellation = SmsCancellationResult> {
+	cancelScheduledPack(
+		packId: string,
+		options?: Readonly<{ signal?: AbortSignal }>,
+	): Promise<TCancellation>;
 }
 
 /** Capability for providers that expose inbound SMS messages. */

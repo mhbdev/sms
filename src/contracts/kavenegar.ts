@@ -30,7 +30,10 @@ export type KavenegarSendResult = SmsSendResult &
 		message?: string;
 	}>;
 
-export type KavenegarSendArrayMessage = SmsBatchMessage;
+export type KavenegarSendArrayMessage = Omit<
+	SmsBatchMessage,
+	"sendAt" | "localId" | "signal"
+>;
 
 export type KavenegarStatusResult = SmsDeliveryStatus & Readonly<{ localId?: string }>;
 

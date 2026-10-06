@@ -20,12 +20,16 @@ export type {
 	SmsBulkSender,
 	SmsBulkSendResult,
 	SmsCancellationResult,
+	SmsCollection,
 	SmsDeliveryStatus,
 	SmsDeliveryStatusQuery,
 	SmsDeliveryStatusReader,
 	SmsInboxReader,
 	SmsMessage,
+	SmsMessageCancellationRequest,
+	SmsMessageScheduler,
 	SmsMessageSender,
+	SmsPackScheduler,
 	SmsPage,
 	SmsReceivedMessage,
 	SmsScheduler,
@@ -39,6 +43,7 @@ export type {
 	SmsIrBulkSendResult,
 	SmsIrCancellationResult,
 	SmsIrLikeToLikeMessage,
+	SmsIrMessage,
 	SmsIrMessageStatus,
 	SmsIrPackMessage,
 	SmsIrPackQuery,
@@ -57,15 +62,19 @@ export {
 } from "./errors/sms-error.js";
 export { SmsIrError } from "./errors/sms-ir-error.js";
 export {
+	parseKavenegarCancellationResponse,
+	parseKavenegarCountResponse,
 	parseKavenegarPayload,
 	parseKavenegarReceivedResponse,
 	parseKavenegarResponse,
+	parseKavenegarSendArrayResponse,
 	parseKavenegarSendEntries,
 	parseKavenegarStatusResponse,
 } from "./providers/kavenegar/kavenegar-api.js";
 export { KavenegarSmsProvider } from "./providers/kavenegar/kavenegar-sms-provider.js";
 export {
 	parseSmsIrBulkResult,
+	parseSmsIrCancellationResult,
 	parseSmsIrMessageStatus,
 	parseSmsIrPackMessages,
 	parseSmsIrPackSummaries,

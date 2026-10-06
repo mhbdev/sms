@@ -16,7 +16,11 @@ import type {
 	KavenegarTemplateMessage,
 } from "../../contracts/kavenegar.js";
 import type {
+	SmsBulkSender,
+	SmsDeliveryStatusReader,
+	SmsInboxReader,
 	SmsMessage,
+	SmsMessageScheduler,
 	SmsMessageSender,
 	SmsTemplateSender,
 } from "../../contracts/sms.js";
@@ -35,10 +39,10 @@ import {
 	kavenegarOptionsSchema,
 	kavenegarReceiveQuerySchema,
 	kavenegarSearchQuerySchema,
+	kavenegarSendArrayMessageSchema,
 	kavenegarTemplateSchema,
 	parseInput,
 	signalOptionsSchema,
-	smsBatchMessageSchema,
 	smsBulkMessageSchema,
 	smsMessageSchema,
 } from "../../validation/schemas.js";
@@ -55,7 +59,13 @@ import {
 const DEFAULT_BASE_URL = "https://api.kavenegar.com/v1";
 
 export class KavenegarSmsProvider
-	implements SmsMessageSender, SmsTemplateSender<KavenegarTemplateMessage>
+	implements
+		SmsMessageSender<SmsMessage, KavenegarSendResult>,
+		SmsTemplateSender<KavenegarTemplateMessage, KavenegarSendResult>,
+		SmsBulkSender<KavenegarBulkRequest, KavenegarBulkResult>,
+		SmsDeliveryStatusReader<KavenegarStatusQuery, readonly KavenegarStatusResult[]>,
+		SmsMessageScheduler<KavenegarCancellationResult>,
+		SmsInboxReader<KavenegarReceiveQuery>
 {
 	readonly name = "kavenegar";
 	private readonly apiKey: string;
@@ -158,7 +168,10 @@ export class KavenegarSmsProvider
 		messages: readonly KavenegarSendArrayMessage[],
 		options: Readonly<{ signal?: AbortSignal }> = {},
 	): Promise<readonly KavenegarSendResult[]> {
-		messages = parseKavenegarInput(z.array(smsBatchMessageSchema).min(1), messages);
+		messages = parseKavenegarInput(
+			z.array(kavenegarSendArrayMessageSchema).min(1),
+			messages,
+		);
 		options = parseKavenegarInput(signalOptionsSchema, options);
 		const body = new URLSearchParams({
 			receptor: JSON.stringify(

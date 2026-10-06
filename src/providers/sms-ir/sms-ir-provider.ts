@@ -1,8 +1,10 @@
 import type { z } from "zod";
 import type {
+	SmsBulkSender,
 	SmsDeliveryStatus,
-	SmsMessage,
+	SmsDeliveryStatusReader,
 	SmsMessageSender,
+	SmsPackScheduler,
 	SmsTemplateSender,
 } from "../../contracts/sms.js";
 import type {
@@ -10,6 +12,7 @@ import type {
 	SmsIrBulkSendResult,
 	SmsIrCancellationResult,
 	SmsIrLikeToLikeMessage,
+	SmsIrMessage,
 	SmsIrMessageStatus,
 	SmsIrPackMessage,
 	SmsIrPackQuery,
@@ -33,11 +36,11 @@ import {
 	packQuerySchema,
 	parseInput,
 	signalOptionsSchema,
-	smsBulkMessageSchema,
+	smsIrBulkMessageSchema,
 	smsIrLikeToLikeSchema,
+	smsIrMessageSchema,
 	smsIrOptionsSchema,
 	smsIrTemplateSchema,
-	smsMessageSchema,
 } from "../../validation/schemas.js";
 import {
 	parseSmsIrBulkResult,
@@ -51,7 +54,12 @@ import {
 const DEFAULT_BASE_URL = "https://api.sms.ir/v1";
 
 export class SmsIrProvider
-	implements SmsMessageSender, SmsTemplateSender<SmsIrTemplateMessage, SmsIrSendResult>
+	implements
+		SmsMessageSender<SmsIrMessage, SmsIrSendResult>,
+		SmsTemplateSender<SmsIrTemplateMessage, SmsIrSendResult>,
+		SmsBulkSender<SmsIrBulkMessage, SmsIrBulkSendResult>,
+		SmsDeliveryStatusReader<SmsIrStatusQuery, readonly SmsDeliveryStatus[]>,
+		SmsPackScheduler<SmsIrCancellationResult>
 {
 	readonly name = "sms.ir";
 	private readonly apiKey: string;
@@ -78,8 +86,8 @@ export class SmsIrProvider
 		});
 	}
 
-	async sendMessage(input: SmsMessage): Promise<SmsIrSendResult> {
-		input = parseSmsIrInput(smsMessageSchema, input);
+	async sendMessage(input: SmsIrMessage): Promise<SmsIrSendResult> {
+		input = parseSmsIrInput(smsIrMessageSchema, input);
 		const result = await this.sendBulk({
 			recipients: [input.recipient],
 			message: input.message,
@@ -97,7 +105,7 @@ export class SmsIrProvider
 	}
 
 	async sendBulk(input: SmsIrBulkMessage): Promise<SmsIrBulkSendResult> {
-		input = parseSmsIrInput(smsBulkMessageSchema, input);
+		input = parseSmsIrInput(smsIrBulkMessageSchema, input);
 		validateRecipients(input.recipients);
 		const body = {
 			lineNumber: this.lineNumber,
@@ -152,12 +160,21 @@ export class SmsIrProvider
 	}
 
 	async cancelScheduled(packId: string): Promise<SmsIrCancellationResult> {
+		return this.cancelScheduledPack(packId);
+	}
+
+	async cancelScheduledPack(
+		packId: string,
+		options: Readonly<{ signal?: AbortSignal }> = {},
+	): Promise<SmsIrCancellationResult> {
 		packId = parseSmsIrInput(localIdSchema, packId).toString();
+		options = parseSmsIrInput(signalOptionsSchema, options);
 		const id = validateRequiredString(packId, "Pack ID");
 		const response = await this.request(
 			`send/scheduled/${encodeURIComponent(id)}`,
 			undefined,
 			"DELETE",
+			options.signal,
 		);
 		return parseSmsIrCancellationResult(response, await response.text(), id);
 	}

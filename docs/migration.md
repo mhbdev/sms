@@ -33,3 +33,7 @@ import { SmsIrProvider } from "@mhbdev/sms/sms-ir";
 The Kavenegar client still converts Iranian `+98` recipients to the local
 provider format, preserves injected fetchers, applies a 10-second default
 timeout, and rejects malformed successful responses.
+
+Kavenegar also supports a default `sender` option and per-message sender
+overrides for raw, bulk, and send-array requests. SMS.ir uses `lineNumber`
+instead; its raw and bulk inputs reject unsupported sender/local-id/tag fields.

@@ -4,6 +4,7 @@ import type {
 	SmsBulkSendResult,
 	SmsCancellationResult,
 	SmsDeliveryStatusQuery,
+	SmsMessage,
 	SmsSendResult,
 } from "./sms.js";
 
@@ -26,6 +27,8 @@ export type SmsIrTemplateMessage = Readonly<{
 	signal?: AbortSignal;
 }>;
 
+export type SmsIrMessage = Omit<SmsMessage, "sender" | "localId" | "tag">;
+
 export type SmsIrSendResult = SmsSendResult &
 	Readonly<{
 		provider: "sms.ir";
@@ -34,7 +37,7 @@ export type SmsIrSendResult = SmsSendResult &
 		messageIds?: readonly (string | null)[];
 	}>;
 
-export type SmsIrBulkMessage = SmsBulkMessage;
+export type SmsIrBulkMessage = Omit<SmsBulkMessage, "sender">;
 export type SmsIrBulkSendResult = SmsBulkSendResult;
 export type SmsIrStatusQuery = SmsDeliveryStatusQuery;
 export type SmsIrCancellationResult = SmsCancellationResult;

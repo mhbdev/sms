@@ -147,4 +147,19 @@ describe("KavenegarSmsProvider", () => {
 		expect(message).not.toContain("super-secret-api-key");
 		expect(message).not.toContain("private message");
 	});
+
+	it("rejects unsupported send-array fields instead of silently dropping them", async () => {
+		const fetcher: SmsHttpFetcher = async () => response({});
+		const provider = new KavenegarSmsProvider({ apiKey: "secret-key", fetcher });
+
+		await expect(
+			provider.sendArray([
+				{
+					recipient: "0912",
+					message: "test",
+					sendAt: 1,
+				} as never,
+			]),
+		).rejects.toThrow('Unrecognized key: "sendAt"');
+	});
 });

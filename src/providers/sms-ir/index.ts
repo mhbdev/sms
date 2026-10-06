@@ -16,6 +16,7 @@ export type {
 export { SmsIrError } from "../../errors/sms-ir-error.js";
 export {
 	parseSmsIrBulkResult,
+	parseSmsIrCancellationResult,
 	parseSmsIrMessageStatus,
 	parseSmsIrPackMessages,
 	parseSmsIrPackSummaries,
