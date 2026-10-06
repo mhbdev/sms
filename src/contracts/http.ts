@@ -1,4 +1,4 @@
-import type { RetryPolicy } from "../transport/http";
+import type { RetryPolicy } from "../transport/http.js";
 
 export type SmsHttpFetcher = (
 	input: string | URL | Request,

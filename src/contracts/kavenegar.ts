@@ -1,4 +1,4 @@
-import type { SmsHttpOptions } from "./http";
+import type { SmsHttpOptions } from "./http.js";
 import type {
 	SmsBatchMessage,
 	SmsBulkMessage,
@@ -9,11 +9,12 @@ import type {
 	SmsReceivedMessage,
 	SmsSendResult,
 	SmsTemplateMessage,
-} from "./sms";
+} from "./sms.js";
 
 export type KavenegarSmsProviderOptions = Readonly<
 	SmsHttpOptions & {
 		apiKey: string;
+		/** Default sender number for raw, bulk, and send-array requests. */
 		sender?: string;
 	}
 >;
@@ -43,6 +44,7 @@ export type KavenegarStatusQuery = SmsDeliveryStatusQuery;
 export type KavenegarReceiveQuery = Readonly<{
 	lineNumber: string;
 	isRead: boolean;
+	signal?: AbortSignal;
 }>;
 
 export type KavenegarCountQuery = Readonly<{
@@ -50,6 +52,7 @@ export type KavenegarCountQuery = Readonly<{
 	endDate?: number;
 	lineNumber?: string;
 	isRead?: boolean;
+	signal?: AbortSignal;
 }>;
 
 export type KavenegarCountResult = Readonly<{
@@ -59,11 +62,13 @@ export type KavenegarCountResult = Readonly<{
 }>;
 
 export type KavenegarSearchQuery = Readonly<{
+	messageIds?: readonly (string | number)[];
 	startDate: number;
 	endDate?: number;
 	lineNumber?: string;
 	page?: number;
 	pageSize?: number;
+	signal?: AbortSignal;
 }>;
 
 export type KavenegarTemplateMessage = SmsTemplateMessage;

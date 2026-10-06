@@ -1,11 +1,11 @@
-import type { SmsHttpOptions } from "./http";
+import type { SmsHttpOptions } from "./http.js";
 import type {
 	SmsBulkMessage,
 	SmsBulkSendResult,
 	SmsCancellationResult,
 	SmsDeliveryStatusQuery,
 	SmsSendResult,
-} from "./sms";
+} from "./sms.js";
 
 export type SmsIrProviderOptions = Readonly<
 	SmsHttpOptions & {
@@ -23,6 +23,7 @@ export type SmsIrTemplateMessage = Readonly<{
 	recipient: string;
 	templateId: number;
 	parameters: readonly SmsIrParameter[];
+	signal?: AbortSignal;
 }>;
 
 export type SmsIrSendResult = SmsSendResult &
@@ -42,6 +43,7 @@ export type SmsIrLikeToLikeMessage = Readonly<{
 	recipients: readonly string[];
 	messages: readonly string[];
 	sendAt?: number;
+	signal?: AbortSignal;
 }>;
 
 export type SmsIrMessageStatus = Readonly<{
@@ -53,6 +55,12 @@ export type SmsIrMessageStatus = Readonly<{
 	cost?: number;
 	deliveryStatus?: string;
 	deliveredAt?: number;
+}>;
+
+export type SmsIrPackQuery = Readonly<{
+	pageNumber?: number;
+	pageSize?: number;
+	signal?: AbortSignal;
 }>;
 
 export type SmsIrPackSummary = Readonly<{

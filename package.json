@@ -4,13 +4,16 @@
 	"description": "Provider-neutral SMS delivery clients for Kavenegar and SMS.ir.",
 	"license": "MIT",
 	"type": "module",
+	"main": "./dist/index.js",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
 	"sideEffects": false,
 	"engines": {
 		"node": ">=20"
 	},
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/mhbdev/sms.git"
+		"url": "git+https://github.com/mhbdev/sms.git"
 	},
 	"bugs": {
 		"url": "https://github.com/mhbdev/sms/issues"
@@ -28,7 +31,8 @@
 		"dist",
 		"README.md",
 		"LICENSE",
-		"CHANGELOG.md"
+		"CHANGELOG.md",
+		"docs"
 	],
 	"exports": {
 		".": {
@@ -37,14 +41,14 @@
 			"default": "./dist/index.js"
 		},
 		"./kavenegar": {
-			"types": "./dist/providers/kavenegar/index.d.ts",
-			"import": "./dist/providers/kavenegar/index.js",
-			"default": "./dist/providers/kavenegar/index.js"
+			"types": "./dist/kavenegar.d.ts",
+			"import": "./dist/kavenegar.js",
+			"default": "./dist/kavenegar.js"
 		},
 		"./sms-ir": {
-			"types": "./dist/providers/sms-ir/index.d.ts",
-			"import": "./dist/providers/sms-ir/index.js",
-			"default": "./dist/providers/sms-ir/index.js"
+			"types": "./dist/sms-ir.d.ts",
+			"import": "./dist/sms-ir.js",
+			"default": "./dist/sms-ir.js"
 		},
 		"./package.json": "./package.json"
 	},
@@ -61,7 +65,7 @@
 		"test:watch": "vitest",
 		"lint": "biome check .",
 		"format": "biome format --write .",
-		"pack:check": "npm run build && publint && attw --pack && npm pack --dry-run",
+		"pack:check": "npm run build && publint && attw --pack --profile esm-only --quiet && npm pack --dry-run",
 		"version": "changeset version",
 		"release": "changeset publish"
 	},

@@ -2,8 +2,8 @@ import type {
 	KavenegarReceivedMessage,
 	KavenegarSendResult,
 	KavenegarStatusResult,
-} from "../../contracts/kavenegar";
-import { KavenegarError } from "../../errors/kavenegar-error";
+} from "../../contracts/kavenegar.js";
+import { KavenegarError } from "../../errors/kavenegar-error.js";
 
 type KavenegarEntry = Readonly<Record<string, unknown>>;
 
@@ -16,6 +16,14 @@ export function parseKavenegarResponse(
 	const entry = entries[0];
 	if (!entry) throw new KavenegarError("Kavenegar did not return a sent message entry");
 	return parseSendEntry(entry);
+}
+
+export function parseKavenegarSendEntries(
+	response: Response,
+	rawResponse: string,
+): readonly KavenegarSendResult[] {
+	const payload = parseKavenegarPayload(response, rawResponse);
+	return toEntries(payload.entries).map(parseSendEntry);
 }
 
 export function parseKavenegarStatusResponse(

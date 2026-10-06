@@ -1,4 +1,10 @@
 import type {
+	SmsDeliveryStatus,
+	SmsMessage,
+	SmsMessageSender,
+	SmsTemplateSender,
+} from "../../contracts/sms.js";
+import type {
 	SmsIrBulkMessage,
 	SmsIrBulkSendResult,
 	SmsIrCancellationResult,
@@ -9,15 +15,16 @@ import type {
 	SmsIrParameter,
 	SmsIrProviderOptions,
 	SmsIrSendResult,
+	SmsIrStatusQuery,
 	SmsIrTemplateMessage,
-} from "../../contracts/sms-ir";
-import { SmsIrError } from "../../errors/sms-ir-error";
+} from "../../contracts/sms-ir.js";
+import { SmsIrError } from "../../errors/sms-ir-error.js";
 import {
 	SmsHttpTransport,
 	toUnixSeconds,
 	validateRecipients,
 	validateRequiredString,
-} from "../../transport/http";
+} from "../../transport/http.js";
 import {
 	parseSmsIrBulkResult,
 	parseSmsIrMessageStatus,
@@ -25,11 +32,13 @@ import {
 	parseSmsIrPackSummaries,
 	parseSmsIrPayload,
 	parseSmsIrSendResult,
-} from "./sms-ir-api";
+} from "./sms-ir-api.js";
 
 const DEFAULT_BASE_URL = "https://api.sms.ir/v1";
 
-export class SmsIrProvider {
+export class SmsIrProvider
+	implements SmsMessageSender, SmsTemplateSender<SmsIrTemplateMessage, SmsIrSendResult>
+{
 	readonly name = "sms.ir";
 	private readonly apiKey: string;
 	private readonly lineNumber: string;
@@ -55,13 +64,12 @@ export class SmsIrProvider {
 		});
 	}
 
-	async sendMessage(
-		input: Readonly<{ recipient: string; message: string; sendAt?: number }>,
-	): Promise<SmsIrSendResult> {
+	async sendMessage(input: SmsMessage): Promise<SmsIrSendResult> {
 		const result = await this.sendBulk({
 			recipients: [input.recipient],
 			message: input.message,
 			sendAt: input.sendAt,
+			signal: input.signal,
 		});
 		const first = result.messages[0];
 		if (!first) throw new SmsIrError("SMS.ir returned no message result");
@@ -81,7 +89,7 @@ export class SmsIrProvider {
 			mobiles: input.recipients,
 			sendDateTime: toUnixSeconds(input.sendAt) ?? null,
 		};
-		const response = await this.request("send/bulk", body);
+		const response = await this.request("send/bulk", body, "POST", input.signal);
 		const result = parseSmsIrBulkResult(response, await response.text());
 		return {
 			provider: "sms.ir",
@@ -103,14 +111,19 @@ export class SmsIrProvider {
 		if (input.recipients.length !== input.messages.length) {
 			throw new SmsIrError("SMS.ir recipients and messages must have equal lengths");
 		}
-		const response = await this.request("send/likeToLike", {
-			lineNumber: this.lineNumber,
-			messageTexts: input.messages.map((message) =>
-				validateRequiredString(message, "Message"),
-			),
-			mobiles: input.recipients,
-			sendDateTime: toUnixSeconds(input.sendAt) ?? null,
-		});
+		const response = await this.request(
+			"send/likeToLike",
+			{
+				lineNumber: this.lineNumber,
+				messageTexts: input.messages.map((message) =>
+					validateRequiredString(message, "Message"),
+				),
+				mobiles: input.recipients,
+				sendDateTime: toUnixSeconds(input.sendAt) ?? null,
+			},
+			"POST",
+			input.signal,
+		);
 		const result = parseSmsIrBulkResult(response, await response.text());
 		return {
 			provider: "sms.ir",
@@ -131,11 +144,16 @@ export class SmsIrProvider {
 		if (!Number.isSafeInteger(input.templateId) || input.templateId <= 0) {
 			throw new SmsIrError("SMS.ir templateId must be a positive integer");
 		}
-		const response = await this.request("send/verify", {
-			mobile: validateRequiredString(input.recipient, "Recipient"),
-			templateId: input.templateId,
-			parameters: input.parameters.map(validateParameter),
-		});
+		const response = await this.request(
+			"send/verify",
+			{
+				mobile: validateRequiredString(input.recipient, "Recipient"),
+				templateId: input.templateId,
+				parameters: input.parameters.map(validateParameter),
+			},
+			"POST",
+			input.signal,
+		);
 		return parseSmsIrSendResult(response, await response.text());
 	}
 
@@ -157,25 +175,68 @@ export class SmsIrProvider {
 		};
 	}
 
-	async getMessageStatus(messageId: string | number): Promise<SmsIrMessageStatus> {
+	async getMessageStatus(
+		messageId: string | number,
+		options: Readonly<{ signal?: AbortSignal }> = {},
+	): Promise<SmsIrMessageStatus> {
 		const id = validateRequiredString(String(messageId), "Message ID");
-		const response = await this.request(`send/${encodeURIComponent(id)}`);
+		const response = await this.request(
+			`send/${encodeURIComponent(id)}`,
+			undefined,
+			"GET",
+			options.signal,
+		);
 		return parseSmsIrMessageStatus(response, await response.text());
 	}
 
+	async getDeliveryStatus(
+		query: SmsIrStatusQuery,
+	): Promise<readonly SmsDeliveryStatus[]> {
+		if (query.messageIds.length === 0)
+			throw new SmsIrError("messageIds must contain at least one identifier");
+		const statuses = await Promise.all(
+			query.messageIds.map((messageId) =>
+				this.getMessageStatus(messageId, { signal: query.signal }),
+			),
+		);
+		return statuses.map((status) => ({
+			messageId: status.messageId,
+			providerStatus: status.deliveryStatus ?? "unknown",
+			...(status.deliveredAt === undefined ? {} : { deliveredAt: status.deliveredAt }),
+			recipient: status.recipient,
+		}));
+	}
+
 	async listPacks(
-		input: Readonly<{ pageNumber?: number; pageSize?: number }> = {},
+		input: Readonly<{
+			pageNumber?: number;
+			pageSize?: number;
+			signal?: AbortSignal;
+		}> = {},
 	): Promise<readonly SmsIrPackSummary[]> {
 		const query = new URLSearchParams();
 		if (input.pageNumber !== undefined) query.set("pageNumber", String(input.pageNumber));
 		if (input.pageSize !== undefined) query.set("pageSize", String(input.pageSize));
-		const response = await this.request(`send/pack${query.size ? `?${query}` : ""}`);
+		const response = await this.request(
+			`send/pack${query.size ? `?${query}` : ""}`,
+			undefined,
+			"GET",
+			input.signal,
+		);
 		return parseSmsIrPackSummaries(response, await response.text());
 	}
 
-	async getPack(packId: string): Promise<readonly SmsIrPackMessage[]> {
+	async getPack(
+		packId: string,
+		options: Readonly<{ signal?: AbortSignal }> = {},
+	): Promise<readonly SmsIrPackMessage[]> {
 		const id = validateRequiredString(packId, "Pack ID");
-		const response = await this.request(`send/pack/${encodeURIComponent(id)}`);
+		const response = await this.request(
+			`send/pack/${encodeURIComponent(id)}`,
+			undefined,
+			"GET",
+			options.signal,
+		);
 		return parseSmsIrPackMessages(response, await response.text());
 	}
 
@@ -183,11 +244,16 @@ export class SmsIrProvider {
 		path: string,
 		body?: unknown,
 		method = "POST",
+		signal?: AbortSignal,
 	): Promise<Response> {
-		return this.transport.request(`${this.baseUrl}/${path}`, {
-			method,
-			...(body === undefined ? {} : { body: JSON.stringify(body) }),
-		});
+		return this.transport.request(
+			`${this.baseUrl}/${path}`,
+			{
+				method,
+				...(body === undefined ? {} : { body: JSON.stringify(body) }),
+			},
+			{ signal },
+		);
 	}
 }
 

@@ -1,5 +1,5 @@
-import type { SmsHttpFetcher } from "../contracts/http";
-import { SmsTransportError, SmsValidationError } from "../errors/sms-error";
+import type { SmsHttpFetcher } from "../contracts/http.js";
+import { SmsTransportError, SmsValidationError } from "../errors/sms-error.js";
 
 export type RetryContext = Readonly<{
 	attempt: number;

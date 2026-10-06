@@ -2,10 +2,12 @@
 export type SmsMessage = Readonly<{
 	recipient: string;
 	message: string;
+	/** Provider sender number override, when the provider supports sender selection. */
 	sender?: string;
 	sendAt?: number;
 	localId?: string | number;
 	tag?: string;
+	signal?: AbortSignal;
 }>;
 
 /** A provider-neutral pattern/template message with ordered parameters. */
@@ -13,23 +15,28 @@ export type SmsTemplateMessage = Readonly<{
 	recipient: string;
 	template: string;
 	parameters: readonly string[];
+	signal?: AbortSignal;
 }>;
 
 /** One message per recipient, useful for provider batch APIs. */
 export type SmsBatchMessage = Readonly<{
 	recipient: string;
 	message: string;
+	/** Provider sender number override, when the provider supports sender selection. */
 	sender?: string;
 	sendAt?: number;
 	localId?: string | number;
+	signal?: AbortSignal;
 }>;
 
 /** A raw message addressed to one or more recipients. */
 export type SmsBulkMessage = Readonly<{
 	recipients: readonly string[];
 	message: string;
+	/** Sender number override for the whole bulk request, when supported. */
 	sender?: string;
 	sendAt?: number;
+	signal?: AbortSignal;
 }>;
 
 /** Result status shared by all providers. */
@@ -63,6 +70,7 @@ export type SmsDeliveryStatus = Readonly<{
 
 export type SmsDeliveryStatusQuery = Readonly<{
 	messageIds: readonly (string | number)[];
+	signal?: AbortSignal;
 }>;
 
 export type SmsCancellationResult = Readonly<{

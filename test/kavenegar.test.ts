@@ -41,6 +41,44 @@ describe("KavenegarSmsProvider", () => {
 		expect(requests[1]?.body).toContain("sender=90005738");
 	});
 
+	it("supports default and per-message sender numbers", async () => {
+		const requests: Array<{ url: string; body: string }> = [];
+		const fetcher: SmsHttpFetcher = async (input, init) => {
+			const url = String(input);
+			requests.push({ url, body: String(init?.body ?? "") });
+			const entries = url.includes("sendarray")
+				? [
+						{ messageid: 3, status: 1, sender: "10004346" },
+						{ messageid: 4, status: 1, sender: "10000000" },
+					]
+				: [{ messageid: 1, status: 1, sender: "10004346" }];
+			return response({ return: { status: 200 }, entries });
+		};
+		const provider = new KavenegarSmsProvider({
+			apiKey: "secret-key",
+			sender: "10004346",
+			fetcher,
+		});
+
+		await provider.sendMessage({ recipient: "0912", message: "raw" });
+		await provider.sendBulk({
+			recipients: ["0912", "0936"],
+			message: "bulk",
+			sender: "10000000",
+		});
+		await provider.sendArray([
+			{ recipient: "0912", message: "default sender" },
+			{ recipient: "0936", message: "override sender", sender: "10000000" },
+		]);
+
+		const raw = new URLSearchParams(requests[0]?.body);
+		const bulk = new URLSearchParams(requests[1]?.body);
+		const sendArray = new URLSearchParams(requests[2]?.body);
+		expect(raw.get("sender")).toBe("10004346");
+		expect(bulk.get("sender")).toBe("10000000");
+		expect(JSON.parse(sendArray.get("sender") ?? "[]")).toEqual(["10004346", "10000000"]);
+	});
+
 	it("parses status, cancellation, and received-message operations", async () => {
 		const fetcher: SmsHttpFetcher = async (input) => {
 			const url = String(input);

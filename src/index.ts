@@ -1,4 +1,4 @@
-export type { SmsHttpFetcher, SmsHttpOptions } from "./contracts/http";
+export type { SmsHttpFetcher, SmsHttpOptions } from "./contracts/http.js";
 export type {
 	KavenegarBulkRequest,
 	KavenegarBulkResult,
@@ -13,7 +13,7 @@ export type {
 	KavenegarStatusQuery,
 	KavenegarStatusResult,
 	KavenegarTemplateMessage,
-} from "./contracts/kavenegar";
+} from "./contracts/kavenegar.js";
 export type {
 	SmsBatchMessage,
 	SmsBulkMessage,
@@ -33,7 +33,7 @@ export type {
 	SmsSendStatus,
 	SmsTemplateMessage,
 	SmsTemplateSender,
-} from "./contracts/sms";
+} from "./contracts/sms.js";
 export type {
 	SmsIrBulkMessage,
 	SmsIrBulkSendResult,
@@ -41,27 +41,29 @@ export type {
 	SmsIrLikeToLikeMessage,
 	SmsIrMessageStatus,
 	SmsIrPackMessage,
+	SmsIrPackQuery,
 	SmsIrPackSummary,
 	SmsIrParameter,
 	SmsIrProviderOptions,
 	SmsIrSendResult,
 	SmsIrStatusQuery,
 	SmsIrTemplateMessage,
-} from "./contracts/sms-ir";
-export { KavenegarError } from "./errors/kavenegar-error";
+} from "./contracts/sms-ir.js";
+export { KavenegarError } from "./errors/kavenegar-error.js";
 export {
 	SmsProviderError,
 	SmsTransportError,
 	SmsValidationError,
-} from "./errors/sms-error";
-export { SmsIrError } from "./errors/sms-ir-error";
+} from "./errors/sms-error.js";
+export { SmsIrError } from "./errors/sms-ir-error.js";
 export {
 	parseKavenegarPayload,
 	parseKavenegarReceivedResponse,
 	parseKavenegarResponse,
+	parseKavenegarSendEntries,
 	parseKavenegarStatusResponse,
-} from "./providers/kavenegar/kavenegar-api";
-export { KavenegarSmsProvider } from "./providers/kavenegar/kavenegar-sms-provider";
+} from "./providers/kavenegar/kavenegar-api.js";
+export { KavenegarSmsProvider } from "./providers/kavenegar/kavenegar-sms-provider.js";
 export {
 	parseSmsIrBulkResult,
 	parseSmsIrMessageStatus,
@@ -69,6 +71,9 @@ export {
 	parseSmsIrPackSummaries,
 	parseSmsIrPayload,
 	parseSmsIrSendResult,
-} from "./providers/sms-ir/sms-ir-api";
-export { SmsIrProvider } from "./providers/sms-ir/sms-ir-provider";
-export type { RetryContext, RetryPolicy } from "./transport/http";
+} from "./providers/sms-ir/sms-ir-api.js";
+export {
+	SmsIrProvider,
+	SmsIrProvider as SmsIrSmsProvider,
+} from "./providers/sms-ir/sms-ir-provider.js";
+export type { RetryContext, RetryPolicy } from "./transport/http.js";

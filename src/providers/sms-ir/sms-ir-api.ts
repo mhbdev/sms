@@ -3,8 +3,8 @@ import type {
 	SmsIrPackMessage,
 	SmsIrPackSummary,
 	SmsIrSendResult,
-} from "../../contracts/sms-ir";
-import { SmsIrError } from "../../errors/sms-ir-error";
+} from "../../contracts/sms-ir.js";
+import { SmsIrError } from "../../errors/sms-ir-error.js";
 
 type SmsIrPayload = Readonly<{ status: number; message?: string; data?: unknown }>;
 

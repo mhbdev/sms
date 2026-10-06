@@ -5,14 +5,15 @@ export type {
 	SmsIrLikeToLikeMessage,
 	SmsIrMessageStatus,
 	SmsIrPackMessage,
+	SmsIrPackQuery,
 	SmsIrPackSummary,
 	SmsIrParameter,
 	SmsIrProviderOptions,
 	SmsIrSendResult,
 	SmsIrStatusQuery,
 	SmsIrTemplateMessage,
-} from "../../contracts/sms-ir";
-export { SmsIrError } from "../../errors/sms-ir-error";
+} from "../../contracts/sms-ir.js";
+export { SmsIrError } from "../../errors/sms-ir-error.js";
 export {
 	parseSmsIrBulkResult,
 	parseSmsIrMessageStatus,
@@ -20,5 +21,5 @@ export {
 	parseSmsIrPackSummaries,
 	parseSmsIrPayload,
 	parseSmsIrSendResult,
-} from "./sms-ir-api";
-export { SmsIrProvider } from "./sms-ir-provider";
+} from "./sms-ir-api.js";
+export { SmsIrProvider, SmsIrProvider as SmsIrSmsProvider } from "./sms-ir-provider.js";

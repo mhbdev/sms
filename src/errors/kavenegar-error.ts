@@ -1,4 +1,4 @@
-import { SmsProviderError } from "./sms-error";
+import { SmsProviderError } from "./sms-error.js";
 
 export class KavenegarError extends SmsProviderError {
 	constructor(

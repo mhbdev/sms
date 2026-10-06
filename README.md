@@ -36,6 +36,21 @@ await sms.sendTemplate({
 });
 ```
 
+For Kavenegar raw, bulk, and send-array requests, `sender` in the provider
+options is the default sender number. A message-level `sender` overrides it:
+
+```ts
+await sms.sendMessage({
+  recipient: "+989121234567",
+  message: "Sent from a specific line.",
+  sender: "10004346",
+});
+```
+
+Kavenegar's pattern/`VerifyLookup` API does not accept a sender number in its
+request; Kavenegar selects the sender associated with the pattern. The sender
+returned by Kavenegar is preserved in the normalized result when provided.
+
 ## SMS.ir
 
 ```ts

@@ -12,12 +12,13 @@ export type {
 	KavenegarStatusQuery,
 	KavenegarStatusResult,
 	KavenegarTemplateMessage,
-} from "../../contracts/kavenegar";
-export { KavenegarError } from "../../errors/kavenegar-error";
+} from "../../contracts/kavenegar.js";
+export { KavenegarError } from "../../errors/kavenegar-error.js";
 export {
 	parseKavenegarPayload,
 	parseKavenegarReceivedResponse,
 	parseKavenegarResponse,
+	parseKavenegarSendEntries,
 	parseKavenegarStatusResponse,
-} from "./kavenegar-api";
-export { KavenegarSmsProvider } from "./kavenegar-sms-provider";
+} from "./kavenegar-api.js";
+export { KavenegarSmsProvider } from "./kavenegar-sms-provider.js";

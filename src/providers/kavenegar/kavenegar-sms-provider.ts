@@ -6,31 +6,33 @@ import type {
 	KavenegarCountResult,
 	KavenegarReceivedMessage,
 	KavenegarReceiveQuery,
+	KavenegarSearchQuery,
 	KavenegarSendArrayMessage,
 	KavenegarSendResult,
 	KavenegarSmsProviderOptions,
 	KavenegarStatusQuery,
 	KavenegarStatusResult,
 	KavenegarTemplateMessage,
-} from "../../contracts/kavenegar";
+} from "../../contracts/kavenegar.js";
 import type {
 	SmsMessage,
 	SmsMessageSender,
 	SmsTemplateSender,
-} from "../../contracts/sms";
-import { KavenegarError } from "../../errors/kavenegar-error";
+} from "../../contracts/sms.js";
+import { KavenegarError } from "../../errors/kavenegar-error.js";
 import {
 	SmsHttpTransport,
 	toUnixSeconds,
 	validateRecipients,
 	validateRequiredString,
-} from "../../transport/http";
+} from "../../transport/http.js";
 import {
 	parseKavenegarPayload,
 	parseKavenegarReceivedResponse,
 	parseKavenegarResponse,
+	parseKavenegarSendEntries,
 	parseKavenegarStatusResponse,
-} from "./kavenegar-api";
+} from "./kavenegar-api.js";
 
 const DEFAULT_BASE_URL = "https://api.kavenegar.com/v1";
 
@@ -73,7 +75,7 @@ export class KavenegarSmsProvider
 		if (sendAt !== undefined) body.set("date", String(sendAt));
 		if (input.localId !== undefined) body.set("localid", String(input.localId));
 		if (input.tag) body.set("tag", input.tag);
-		return this.send("sms/send.json", body);
+		return this.send("sms/send.json", body, input.signal);
 	}
 
 	async sendTemplate(message: KavenegarTemplateMessage): Promise<KavenegarSendResult> {
@@ -95,7 +97,7 @@ export class KavenegarSmsProvider
 		});
 		if (message.parameters[1] !== undefined) body.set("token2", message.parameters[1]);
 		if (message.parameters[2] !== undefined) body.set("token3", message.parameters[2]);
-		return this.send("verify/lookup.json", body);
+		return this.send("verify/lookup.json", body, message.signal);
 	}
 
 	async sendBulk(message: KavenegarBulkRequest): Promise<KavenegarBulkResult> {
@@ -108,12 +110,17 @@ export class KavenegarSmsProvider
 			body.set("sender", message.sender ?? this.sender ?? "");
 		const sendAt = toUnixSeconds(message.sendAt);
 		if (sendAt !== undefined) body.set("date", String(sendAt));
-		const result = await this.send("sms/send.json", body);
-		return { provider: "kavenegar", messages: [result], cost: result.cost };
+		const messages = await this.sendMany("sms/send.json", body, message.signal);
+		return {
+			provider: "kavenegar",
+			messages,
+			cost: messages.reduce((total, item) => total + (item.cost ?? 0), 0),
+		};
 	}
 
 	async sendArray(
 		messages: readonly KavenegarSendArrayMessage[],
+		options: Readonly<{ signal?: AbortSignal }> = {},
 	): Promise<readonly KavenegarSendResult[]> {
 		if (messages.length === 0)
 			throw new KavenegarError("At least one batch message is required");
@@ -126,7 +133,7 @@ export class KavenegarSmsProvider
 				messages.map((item) => validateRequiredString(item.message, "Message")),
 			),
 		});
-		const response = await this.request("sms/sendarray.json", body);
+		const response = await this.request("sms/sendarray.json", body, options.signal);
 		const raw = await response.text();
 		const payload = parseKavenegarPayload(response, raw);
 		const entries = Array.isArray(payload.entries)
@@ -163,7 +170,7 @@ export class KavenegarSmsProvider
 		const body = new URLSearchParams({
 			messageid: query.messageIds.map(String).join(","),
 		});
-		return this.parseStatusRequest("sms/status.json", body);
+		return this.parseStatusRequest("sms/status.json", body, query.signal);
 	}
 
 	async getStatusByLocalId(
@@ -204,6 +211,7 @@ export class KavenegarSmsProvider
 				linenumber: query.lineNumber,
 				isread: query.isRead ? "1" : "0",
 			}),
+			query.signal,
 		);
 		const raw = await response.text();
 		return { items: parseKavenegarReceivedResponse(response, raw) };
@@ -216,7 +224,7 @@ export class KavenegarSmsProvider
 		if (query.endDate !== undefined) body.set("enddate", String(query.endDate));
 		if (query.lineNumber) body.set("linenumber", query.lineNumber);
 		if (query.isRead !== undefined) body.set("isread", query.isRead ? "1" : "0");
-		const response = await this.request("sms/countinbox.json", body);
+		const response = await this.request("sms/countinbox.json", body, query.signal);
 		const raw = await response.text();
 		const payload = parseKavenegarPayload(response, raw);
 		return toEntries(payload.entries).map((entry) => ({
@@ -226,26 +234,106 @@ export class KavenegarSmsProvider
 		}));
 	}
 
+	async getSentMessages(
+		query: KavenegarSearchQuery,
+	): Promise<readonly KavenegarSendResult[]> {
+		const body = this.searchBody(query);
+		const response = await this.request("sms/select.json", body, query.signal);
+		return parseKavenegarSendEntries(response, await response.text());
+	}
+
+	async listSentMessages(
+		query: KavenegarSearchQuery,
+	): Promise<readonly KavenegarSendResult[]> {
+		const response = await this.request(
+			"sms/list.json",
+			this.searchBody(query),
+			query.signal,
+		);
+		return parseKavenegarSendEntries(response, await response.text());
+	}
+
+	async getLatestSentMessages(
+		query: KavenegarSearchQuery,
+	): Promise<readonly KavenegarSendResult[]> {
+		const response = await this.request(
+			"sms/last.json",
+			this.searchBody(query),
+			query.signal,
+		);
+		return parseKavenegarSendEntries(response, await response.text());
+	}
+
+	async countSentMessages(
+		query: KavenegarSearchQuery,
+	): Promise<readonly KavenegarCountResult[]> {
+		const response = await this.request(
+			"sms/count.json",
+			this.searchBody(query),
+			query.signal,
+		);
+		const payload = parseKavenegarPayload(response, await response.text());
+		return toEntries(payload.entries).map((entry) => ({
+			startDate: numberValue(entry.startdate, "startdate"),
+			endDate: numberValue(entry.enddate, "enddate"),
+			count: numberValue(entry.sumcount ?? entry.count, "sumcount"),
+		}));
+	}
+
+	private searchBody(query: KavenegarSearchQuery): URLSearchParams {
+		const body = new URLSearchParams();
+		if (query.messageIds?.length)
+			body.set("messageid", query.messageIds.map(String).join(","));
+		body.set("startdate", String(query.startDate));
+		if (query.endDate !== undefined) body.set("enddate", String(query.endDate));
+		if (query.lineNumber) body.set("linenumber", query.lineNumber);
+		if (query.page !== undefined) body.set("page", String(query.page));
+		if (query.pageSize !== undefined) body.set("pagesize", String(query.pageSize));
+		return body;
+	}
+
 	private async parseStatusRequest(
 		path: string,
 		body: URLSearchParams,
+		signal?: AbortSignal,
 	): Promise<readonly KavenegarStatusResult[]> {
-		const response = await this.request(path, body);
+		const response = await this.request(path, body, signal);
 		return parseKavenegarStatusResponse(response, await response.text());
 	}
 
-	private async send(path: string, body: URLSearchParams): Promise<KavenegarSendResult> {
-		const response = await this.request(path, body);
+	private async send(
+		path: string,
+		body: URLSearchParams,
+		signal?: AbortSignal,
+	): Promise<KavenegarSendResult> {
+		const response = await this.request(path, body, signal);
 		return parseKavenegarResponse(response, await response.text());
 	}
 
-	private async request(path: string, body: URLSearchParams): Promise<Response> {
+	private async sendMany(
+		path: string,
+		body: URLSearchParams,
+		signal?: AbortSignal,
+	): Promise<readonly KavenegarSendResult[]> {
+		const response = await this.request(path, body, signal);
+		return parseKavenegarSendEntries(response, await response.text());
+	}
+
+	private async request(
+		path: string,
+		body: URLSearchParams,
+		signal?: AbortSignal,
+	): Promise<Response> {
 		try {
-			return await this.transport.request(`${this.baseUrl}/${this.apiKey}/${path}`, {
-				method: "POST",
-				headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
-				body: body.toString(),
-			});
+			return await this.transport.request(
+				`${this.baseUrl}/${this.apiKey}/${path}`,
+				{
+					method: "POST",
+					headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
+					body: body.toString(),
+				},
+				{ signal },
+			);
 		} catch (error) {
 			if (error instanceof KavenegarError) throw error;
 			throw new KavenegarError("Kavenegar request failed to send", { cause: error });
