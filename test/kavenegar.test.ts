@@ -126,4 +126,25 @@ describe("KavenegarSmsProvider", () => {
 			provider.sendMessage({ recipient: "0912", message: "test" }),
 		).rejects.toThrow("Kavenegar response omitted");
 	});
+
+	it("rejects malformed response entries with Zod validation", async () => {
+		const fetcher: SmsHttpFetcher = async () =>
+			response({ return: { status: 200 }, entries: [{ messageid: { leaked: true } }] });
+		const provider = new KavenegarSmsProvider({
+			apiKey: "super-secret-api-key",
+			fetcher,
+		});
+
+		let error: unknown;
+		try {
+			await provider.sendMessage({ recipient: "0912", message: "private message" });
+		} catch (value) {
+			error = value;
+		}
+		expect(error).toBeInstanceOf(Error);
+		const message = (error as Error).message;
+		expect(message).toContain("messageid");
+		expect(message).not.toContain("super-secret-api-key");
+		expect(message).not.toContain("private message");
+	});
 });

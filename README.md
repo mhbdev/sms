@@ -4,9 +4,10 @@ Provider-neutral SMS delivery clients for Node.js 20+ and Bun, with first-class
 adapters for [Kavenegar](https://kavenegar.com/rest.html) and
 [SMS.ir](https://sms.ir/rest-api/).
 
-The package uses the platform `fetch` API, has no runtime dependencies, supports
-injected transports for deterministic tests, and never retries paid messages unless
-you explicitly configure a retry policy.
+The package uses the platform `fetch` API and Zod for strict runtime validation of
+configuration, requests, and provider responses. It supports injected transports for
+deterministic tests and never retries paid messages unless you explicitly configure a
+retry policy.
 
 ## Install
 

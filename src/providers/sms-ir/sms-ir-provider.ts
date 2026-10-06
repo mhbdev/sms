@@ -1,3 +1,4 @@
+import type { z } from "zod";
 import type {
 	SmsDeliveryStatus,
 	SmsMessage,
@@ -11,6 +12,7 @@ import type {
 	SmsIrLikeToLikeMessage,
 	SmsIrMessageStatus,
 	SmsIrPackMessage,
+	SmsIrPackQuery,
 	SmsIrPackSummary,
 	SmsIrParameter,
 	SmsIrProviderOptions,
@@ -26,11 +28,23 @@ import {
 	validateRequiredString,
 } from "../../transport/http.js";
 import {
+	deliveryStatusQuerySchema,
+	localIdSchema,
+	packQuerySchema,
+	parseInput,
+	signalOptionsSchema,
+	smsBulkMessageSchema,
+	smsIrLikeToLikeSchema,
+	smsIrOptionsSchema,
+	smsIrTemplateSchema,
+	smsMessageSchema,
+} from "../../validation/schemas.js";
+import {
 	parseSmsIrBulkResult,
+	parseSmsIrCancellationResult,
 	parseSmsIrMessageStatus,
 	parseSmsIrPackMessages,
 	parseSmsIrPackSummaries,
-	parseSmsIrPayload,
 	parseSmsIrSendResult,
 } from "./sms-ir-api.js";
 
@@ -46,25 +60,26 @@ export class SmsIrProvider
 	private readonly transport: SmsHttpTransport;
 
 	constructor(options: SmsIrProviderOptions) {
-		if (!options.apiKey.trim()) throw new SmsIrError("SMS.ir API key is required");
-		this.apiKey = options.apiKey;
-		this.lineNumber = String(options.lineNumber);
+		const validated = parseSmsIrInput(smsIrOptionsSchema, options);
+		this.apiKey = validated.apiKey;
+		this.lineNumber = String(validated.lineNumber);
 		validateRequiredString(this.lineNumber, "SMS.ir line number");
-		this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, "");
+		this.baseUrl = (validated.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, "");
 		this.transport = new SmsHttpTransport({
-			fetcher: options.fetcher ?? fetch,
-			timeoutMs: options.timeoutMs ?? 10_000,
-			retry: options.retry,
+			fetcher: validated.fetcher ?? fetch,
+			timeoutMs: validated.timeoutMs ?? 10_000,
+			retry: validated.retry,
 			defaultHeaders: {
 				"X-API-KEY": this.apiKey,
 				Accept: "application/json",
 				"Content-Type": "application/json",
-				...options.defaultHeaders,
+				...validated.defaultHeaders,
 			},
 		});
 	}
 
 	async sendMessage(input: SmsMessage): Promise<SmsIrSendResult> {
+		input = parseSmsIrInput(smsMessageSchema, input);
 		const result = await this.sendBulk({
 			recipients: [input.recipient],
 			message: input.message,
@@ -82,6 +97,7 @@ export class SmsIrProvider
 	}
 
 	async sendBulk(input: SmsIrBulkMessage): Promise<SmsIrBulkSendResult> {
+		input = parseSmsIrInput(smsBulkMessageSchema, input);
 		validateRecipients(input.recipients);
 		const body = {
 			lineNumber: this.lineNumber,
@@ -91,22 +107,11 @@ export class SmsIrProvider
 		};
 		const response = await this.request("send/bulk", body, "POST", input.signal);
 		const result = parseSmsIrBulkResult(response, await response.text());
-		return {
-			provider: "sms.ir",
-			batchId: result.batchId,
-			cost: result.cost,
-			messages: (result.messageIds ?? []).map((messageId, index) => ({
-				provider: "sms.ir",
-				messageId,
-				status: input.sendAt === undefined ? "accepted" : "scheduled",
-				recipient: input.recipients[index],
-				batchId: result.batchId,
-				cost: result.cost,
-			})),
-		};
+		return this.toBulkSendResult(input.recipients, input.sendAt, result);
 	}
 
 	async sendLikeToLike(input: SmsIrLikeToLikeMessage): Promise<SmsIrBulkSendResult> {
+		input = parseSmsIrInput(smsIrLikeToLikeSchema, input);
 		validateRecipients(input.recipients);
 		if (input.recipients.length !== input.messages.length) {
 			throw new SmsIrError("SMS.ir recipients and messages must have equal lengths");
@@ -125,22 +130,11 @@ export class SmsIrProvider
 			input.signal,
 		);
 		const result = parseSmsIrBulkResult(response, await response.text());
-		return {
-			provider: "sms.ir",
-			batchId: result.batchId,
-			cost: result.cost,
-			messages: (result.messageIds ?? []).map((messageId, index) => ({
-				provider: "sms.ir",
-				messageId,
-				status: input.sendAt === undefined ? "accepted" : "scheduled",
-				recipient: input.recipients[index],
-				batchId: result.batchId,
-				cost: result.cost,
-			})),
-		};
+		return this.toBulkSendResult(input.recipients, input.sendAt, result);
 	}
 
 	async sendTemplate(input: SmsIrTemplateMessage): Promise<SmsIrSendResult> {
+		input = parseSmsIrInput(smsIrTemplateSchema, input);
 		if (!Number.isSafeInteger(input.templateId) || input.templateId <= 0) {
 			throw new SmsIrError("SMS.ir templateId must be a positive integer");
 		}
@@ -158,27 +152,22 @@ export class SmsIrProvider
 	}
 
 	async cancelScheduled(packId: string): Promise<SmsIrCancellationResult> {
+		packId = parseSmsIrInput(localIdSchema, packId).toString();
 		const id = validateRequiredString(packId, "Pack ID");
 		const response = await this.request(
 			`send/scheduled/${encodeURIComponent(id)}`,
 			undefined,
 			"DELETE",
 		);
-		const payload = parseSmsIrPayload(response, await response.text());
-		if (!isRecord(payload.data))
-			throw new SmsIrError("SMS.ir response omitted cancellation data");
-		return {
-			provider: "sms.ir",
-			batchId: id,
-			returnedCredit: numberValueOptional(payload.data.returnedCreditCount),
-			statusText: typeof payload.message === "string" ? payload.message : undefined,
-		};
+		return parseSmsIrCancellationResult(response, await response.text(), id);
 	}
 
 	async getMessageStatus(
 		messageId: string | number,
 		options: Readonly<{ signal?: AbortSignal }> = {},
 	): Promise<SmsIrMessageStatus> {
+		messageId = parseSmsIrInput(localIdSchema, messageId);
+		options = parseSmsIrInput(signalOptionsSchema, options);
 		const id = validateRequiredString(String(messageId), "Message ID");
 		const response = await this.request(
 			`send/${encodeURIComponent(id)}`,
@@ -192,6 +181,7 @@ export class SmsIrProvider
 	async getDeliveryStatus(
 		query: SmsIrStatusQuery,
 	): Promise<readonly SmsDeliveryStatus[]> {
+		query = parseSmsIrInput(deliveryStatusQuerySchema, query);
 		if (query.messageIds.length === 0)
 			throw new SmsIrError("messageIds must contain at least one identifier");
 		const statuses = await Promise.all(
@@ -207,13 +197,8 @@ export class SmsIrProvider
 		}));
 	}
 
-	async listPacks(
-		input: Readonly<{
-			pageNumber?: number;
-			pageSize?: number;
-			signal?: AbortSignal;
-		}> = {},
-	): Promise<readonly SmsIrPackSummary[]> {
+	async listPacks(input: SmsIrPackQuery = {}): Promise<readonly SmsIrPackSummary[]> {
+		input = parseSmsIrInput(packQuerySchema, input);
 		const query = new URLSearchParams();
 		if (input.pageNumber !== undefined) query.set("pageNumber", String(input.pageNumber));
 		if (input.pageSize !== undefined) query.set("pageSize", String(input.pageSize));
@@ -230,6 +215,8 @@ export class SmsIrProvider
 		packId: string,
 		options: Readonly<{ signal?: AbortSignal }> = {},
 	): Promise<readonly SmsIrPackMessage[]> {
+		packId = parseSmsIrInput(localIdSchema, packId).toString();
+		options = parseSmsIrInput(signalOptionsSchema, options);
 		const id = validateRequiredString(packId, "Pack ID");
 		const response = await this.request(
 			`send/pack/${encodeURIComponent(id)}`,
@@ -255,6 +242,37 @@ export class SmsIrProvider
 			{ signal },
 		);
 	}
+
+	private toBulkSendResult(
+		recipients: readonly string[],
+		sendAt: number | Date | undefined,
+		result: SmsIrSendResult,
+	): SmsIrBulkSendResult {
+		return {
+			provider: "sms.ir",
+			batchId: result.batchId,
+			cost: result.cost,
+			messages: (result.messageIds ?? []).map((messageId, index) => ({
+				provider: "sms.ir",
+				messageId,
+				status: sendAt === undefined ? "accepted" : "scheduled",
+				recipient: recipients[index],
+				batchId: result.batchId,
+				cost: result.cost,
+			})),
+		};
+	}
+}
+
+function parseSmsIrInput<TSchema extends z.ZodType>(
+	schema: TSchema,
+	value: unknown,
+): z.output<TSchema> {
+	return parseInput(
+		schema,
+		value,
+		(message, cause) => new SmsIrError(message, { cause }),
+	);
 }
 
 function validateParameter(parameter: SmsIrParameter): SmsIrParameter {
@@ -262,12 +280,4 @@ function validateParameter(parameter: SmsIrParameter): SmsIrParameter {
 		name: validateRequiredString(parameter.name, "Template parameter name"),
 		value: parameter.value,
 	};
-}
-
-function numberValueOptional(value: unknown): number | undefined {
-	return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-}
-
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }

@@ -1,4 +1,6 @@
+import { z } from "zod";
 import type {
+	SmsIrCancellationResult,
 	SmsIrMessageStatus,
 	SmsIrPackMessage,
 	SmsIrPackSummary,
@@ -7,6 +9,53 @@ import type {
 import { SmsIrError } from "../../errors/sms-ir-error.js";
 
 type SmsIrPayload = Readonly<{ status: number; message?: string; data?: unknown }>;
+
+const stringLikeSchema = z.union([z.string(), z.number().finite()]);
+const payloadSchema = z
+	.object({
+		status: z.number().finite(),
+		message: z.string().optional(),
+		data: z.unknown().optional(),
+	})
+	.loose();
+const sendDataSchema = z
+	.object({
+		messageId: stringLikeSchema,
+		cost: z.number().finite().optional(),
+	})
+	.loose();
+const bulkDataSchema = z
+	.object({
+		packId: stringLikeSchema,
+		messageIds: z.array(z.union([stringLikeSchema, z.null()])).optional(),
+		cost: z.number().finite().optional(),
+	})
+	.loose();
+const messageDataSchema = z
+	.object({
+		messageId: stringLikeSchema,
+		mobile: stringLikeSchema,
+		messageText: z.string().optional(),
+		sendDateTime: z.number().finite().optional(),
+		lineNumber: z.number().finite().optional(),
+		cost: z.number().finite().optional(),
+		deliveryState: z.union([z.string(), z.number(), z.boolean()]).nullable().optional(),
+		deliveryDateTime: z.number().finite().optional(),
+	})
+	.loose();
+const packSummarySchema = z
+	.object({
+		packId: stringLikeSchema,
+		recipientCount: z.number().finite(),
+		creationDateTime: z.number().finite(),
+	})
+	.loose();
+const cancellationDataSchema = z
+	.object({
+		returnedCreditCount: z.number().finite().optional(),
+		smsCount: z.number().finite().optional(),
+	})
+	.loose();
 
 export function parseSmsIrPayload(response: Response, rawResponse: string): SmsIrPayload {
 	let value: unknown;
@@ -18,23 +67,25 @@ export function parseSmsIrPayload(response: Response, rawResponse: string): SmsI
 			cause: error,
 		});
 	}
-	if (!isRecord(value) || typeof value.status !== "number") {
+	const parsed = payloadSchema.safeParse(value);
+	if (!parsed.success) {
 		throw new SmsIrError("SMS.ir returned an invalid response payload", {
 			httpStatus: response.status,
+			cause: parsed.error,
 		});
 	}
-	const message = typeof value.message === "string" ? value.message : undefined;
-	if (!response.ok || value.status !== 1) {
+	const message = parsed.data.message;
+	if (!response.ok || parsed.data.status !== 1) {
 		throw new SmsIrError(message ?? "SMS.ir rejected the request", {
 			httpStatus: response.status,
-			providerStatus: value.status,
+			providerStatus: parsed.data.status,
 			retryable: response.status === 429 || response.status >= 500,
 		});
 	}
 	return {
-		status: value.status,
+		status: parsed.data.status,
 		...(message === undefined ? {} : { message }),
-		...(value.data === undefined ? {} : { data: value.data }),
+		...(parsed.data.data === undefined ? {} : { data: parsed.data.data }),
 	};
 }
 
@@ -43,9 +94,13 @@ export function parseSmsIrSendResult(
 	rawResponse: string,
 ): SmsIrSendResult {
 	const payload = parseSmsIrPayload(response, rawResponse);
-	if (!isRecord(payload.data)) throw new SmsIrError("SMS.ir response omitted send data");
-	const messageId = stringNumberValue(payload.data.messageId, "messageId");
-	const cost = numberValueOptional(payload.data.cost);
+	const data = parseSmsIrData(
+		sendDataSchema,
+		payload.data,
+		"SMS.ir response omitted send data",
+	);
+	const messageId = stringNumberValue(data.messageId, "messageId");
+	const cost = numberValueOptional(data.cost);
 	return {
 		provider: "sms.ir",
 		messageId,
@@ -60,14 +115,18 @@ export function parseSmsIrBulkResult(
 	rawResponse: string,
 ): SmsIrSendResult {
 	const payload = parseSmsIrPayload(response, rawResponse);
-	if (!isRecord(payload.data)) throw new SmsIrError("SMS.ir response omitted bulk data");
-	const batchId = stringValue(payload.data.packId, "packId");
-	const ids = Array.isArray(payload.data.messageIds)
-		? payload.data.messageIds.map((value) =>
+	const data = parseSmsIrData(
+		bulkDataSchema,
+		payload.data,
+		"SMS.ir response omitted bulk data",
+	);
+	const batchId = stringValue(data.packId, "packId");
+	const ids = data.messageIds
+		? data.messageIds.map((value) =>
 				value === null ? null : stringNumberValue(value, "messageIds"),
 			)
 		: [];
-	const cost = numberValueOptional(payload.data.cost);
+	const cost = numberValueOptional(data.cost);
 	return {
 		provider: "sms.ir",
 		messageId: ids[0] ?? null,
@@ -78,35 +137,31 @@ export function parseSmsIrBulkResult(
 	};
 }
 
+export function parseSmsIrCancellationResult(
+	response: Response,
+	rawResponse: string,
+	batchId: string,
+): SmsIrCancellationResult {
+	const payload = parseSmsIrPayload(response, rawResponse);
+	const data = parseSmsIrData(
+		cancellationDataSchema,
+		payload.data,
+		"SMS.ir response omitted cancellation data",
+	);
+	return {
+		provider: "sms.ir",
+		batchId,
+		returnedCredit: numberValueOptional(data.returnedCreditCount),
+		statusText: payload.message,
+	};
+}
+
 export function parseSmsIrMessageStatus(
 	response: Response,
 	rawResponse: string,
 ): SmsIrMessageStatus {
 	const payload = parseSmsIrPayload(response, rawResponse);
-	if (!isRecord(payload.data))
-		throw new SmsIrError("SMS.ir response omitted message status data");
-	return {
-		messageId: stringNumberValue(payload.data.messageId, "messageId"),
-		recipient: stringNumberValue(payload.data.mobile, "mobile"),
-		...(typeof payload.data.messageText === "string"
-			? { message: payload.data.messageText }
-			: {}),
-		...(numberValueOptional(payload.data.sendDateTime) === undefined
-			? {}
-			: { sentAt: numberValueOptional(payload.data.sendDateTime) }),
-		...(numberValueOptional(payload.data.lineNumber) === undefined
-			? {}
-			: { lineNumber: String(numberValueOptional(payload.data.lineNumber)) }),
-		...(numberValueOptional(payload.data.cost) === undefined
-			? {}
-			: { cost: numberValueOptional(payload.data.cost) }),
-		...(payload.data.deliveryState === null || payload.data.deliveryState === undefined
-			? {}
-			: { deliveryStatus: String(payload.data.deliveryState) }),
-		...(numberValueOptional(payload.data.deliveryDateTime) === undefined
-			? {}
-			: { deliveredAt: numberValueOptional(payload.data.deliveryDateTime) }),
-	};
+	return parseSmsIrMessageData(payload.data);
 }
 
 export function parseSmsIrPackSummaries(
@@ -117,11 +172,15 @@ export function parseSmsIrPackSummaries(
 	if (!Array.isArray(payload.data))
 		throw new SmsIrError("SMS.ir response omitted pack data");
 	return payload.data.map((value) => {
-		if (!isRecord(value)) throw new SmsIrError("SMS.ir returned an invalid pack entry");
+		const entry = parseSmsIrData(
+			packSummarySchema,
+			value,
+			"SMS.ir returned an invalid pack entry",
+		);
 		return {
-			packId: stringValue(value.packId, "packId"),
-			recipientCount: numberValue(value.recipientCount, "recipientCount"),
-			createdAt: numberValue(value.creationDateTime, "creationDateTime"),
+			packId: stringValue(entry.packId, "packId"),
+			recipientCount: numberValue(entry.recipientCount, "recipientCount"),
+			createdAt: numberValue(entry.creationDateTime, "creationDateTime"),
 		};
 	});
 }
@@ -135,27 +194,42 @@ export function parseSmsIrPackMessages(
 		throw new SmsIrError("SMS.ir response omitted pack message data");
 	return payload.data.map((value) => {
 		if (!isRecord(value)) throw new SmsIrError("SMS.ir returned an invalid pack message");
-		return {
-			messageId: stringNumberValue(value.messageId, "messageId"),
-			recipient: stringNumberValue(value.mobile, "mobile"),
-			...(typeof value.messageText === "string" ? { message: value.messageText } : {}),
-			...(numberValueOptional(value.sendDateTime) === undefined
-				? {}
-				: { sentAt: numberValueOptional(value.sendDateTime) }),
-			...(numberValueOptional(value.lineNumber) === undefined
-				? {}
-				: { lineNumber: String(numberValueOptional(value.lineNumber)) }),
-			...(numberValueOptional(value.cost) === undefined
-				? {}
-				: { cost: numberValueOptional(value.cost) }),
-			...(value.deliveryState === null || value.deliveryState === undefined
-				? {}
-				: { deliveryStatus: String(value.deliveryState) }),
-			...(numberValueOptional(value.deliveryDateTime) === undefined
-				? {}
-				: { deliveredAt: numberValueOptional(value.deliveryDateTime) }),
-		};
+		return parseSmsIrMessageData(value);
 	});
+}
+
+function parseSmsIrMessageData(data: unknown): SmsIrMessageStatus {
+	const entry = parseSmsIrData(
+		messageDataSchema,
+		data,
+		"SMS.ir response omitted message status data",
+	);
+	const sentAt = numberValueOptional(entry.sendDateTime);
+	const lineNumber = numberValueOptional(entry.lineNumber);
+	const cost = numberValueOptional(entry.cost);
+	const deliveredAt = numberValueOptional(entry.deliveryDateTime);
+	return {
+		messageId: stringNumberValue(entry.messageId, "messageId"),
+		recipient: stringNumberValue(entry.mobile, "mobile"),
+		...(typeof entry.messageText === "string" ? { message: entry.messageText } : {}),
+		...(sentAt === undefined ? {} : { sentAt }),
+		...(lineNumber === undefined ? {} : { lineNumber: String(lineNumber) }),
+		...(cost === undefined ? {} : { cost }),
+		...(entry.deliveryState === null || entry.deliveryState === undefined
+			? {}
+			: { deliveryStatus: String(entry.deliveryState) }),
+		...(deliveredAt === undefined ? {} : { deliveredAt }),
+	};
+}
+
+function parseSmsIrData<TSchema extends z.ZodType>(
+	schema: TSchema,
+	value: unknown,
+	message: string,
+): z.output<TSchema> {
+	const result = schema.safeParse(value);
+	if (!result.success) throw new SmsIrError(message, { cause: result.error });
+	return result.data;
 }
 
 function stringValue(value: unknown, field: string): string {

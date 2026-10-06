@@ -65,6 +65,7 @@
 		"test:watch": "vitest",
 		"lint": "biome check .",
 		"format": "biome format --write .",
+		"audit": "npm audit --audit-level=high && npm audit --omit=dev --audit-level=high && npm audit signatures",
 		"pack:check": "npm run build && publint && attw --pack --profile esm-only --quiet && npm pack --dry-run",
 		"version": "changeset version",
 		"release": "changeset publish"
@@ -74,9 +75,12 @@
 		"@biomejs/biome": "^2.5.6",
 		"@changesets/changelog-github": "^1.0.1",
 		"@changesets/cli": "^3.0.3",
-		"@types/node": "^24.10.1",
+		"@types/node": "26.6.4",
 		"publint": "^0.3.25",
-		"typescript": "^5.9.3",
+		"typescript": "7.0.2",
 		"vitest": "^4.1.11"
+	},
+	"dependencies": {
+		"zod": "4.6.5"
 	}
 }

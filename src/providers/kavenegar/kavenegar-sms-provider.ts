@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type {
 	KavenegarBulkRequest,
 	KavenegarBulkResult,
@@ -27,9 +28,26 @@ import {
 	validateRequiredString,
 } from "../../transport/http.js";
 import {
-	parseKavenegarPayload,
+	cancellationInputSchema,
+	deliveryStatusQuerySchema,
+	idsInputSchema,
+	kavenegarCountQuerySchema,
+	kavenegarOptionsSchema,
+	kavenegarReceiveQuerySchema,
+	kavenegarSearchQuerySchema,
+	kavenegarTemplateSchema,
+	parseInput,
+	signalOptionsSchema,
+	smsBatchMessageSchema,
+	smsBulkMessageSchema,
+	smsMessageSchema,
+} from "../../validation/schemas.js";
+import {
+	parseKavenegarCancellationResponse,
+	parseKavenegarCountResponse,
 	parseKavenegarReceivedResponse,
 	parseKavenegarResponse,
+	parseKavenegarSendArrayResponse,
 	parseKavenegarSendEntries,
 	parseKavenegarStatusResponse,
 } from "./kavenegar-api.js";
@@ -46,15 +64,15 @@ export class KavenegarSmsProvider
 	private readonly transport: SmsHttpTransport;
 
 	constructor(options: KavenegarSmsProviderOptions) {
-		if (!options.apiKey.trim()) throw new KavenegarError("Kavenegar API key is required");
-		this.apiKey = options.apiKey;
-		this.sender = options.sender;
-		this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, "");
+		const validated = parseKavenegarInput(kavenegarOptionsSchema, options);
+		this.apiKey = validated.apiKey;
+		this.sender = validated.sender;
+		this.baseUrl = (validated.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, "");
 		this.transport = new SmsHttpTransport({
-			fetcher: options.fetcher ?? fetch,
-			timeoutMs: options.timeoutMs ?? 10_000,
-			retry: options.retry,
-			defaultHeaders: options.defaultHeaders,
+			fetcher: validated.fetcher ?? fetch,
+			timeoutMs: validated.timeoutMs ?? 10_000,
+			retry: validated.retry,
+			defaultHeaders: validated.defaultHeaders,
 		});
 	}
 
@@ -63,6 +81,7 @@ export class KavenegarSmsProvider
 	}
 
 	async sendMessage(input: SmsMessage): Promise<KavenegarSendResult> {
+		input = parseKavenegarInput(smsMessageSchema, input);
 		const recipient = validateRequiredString(input.recipient, "Recipient");
 		const text = validateRequiredString(input.message, "Message");
 		const body = new URLSearchParams({
@@ -75,10 +94,16 @@ export class KavenegarSmsProvider
 		if (sendAt !== undefined) body.set("date", String(sendAt));
 		if (input.localId !== undefined) body.set("localid", String(input.localId));
 		if (input.tag) body.set("tag", input.tag);
-		return this.send("sms/send.json", body, input.signal);
+		return this.requestAndParse(
+			"sms/send.json",
+			body,
+			parseKavenegarResponse,
+			input.signal,
+		);
 	}
 
 	async sendTemplate(message: KavenegarTemplateMessage): Promise<KavenegarSendResult> {
+		message = parseKavenegarInput(kavenegarTemplateSchema, message);
 		const recipient = validateRequiredString(message.recipient, "Recipient");
 		const template = validateRequiredString(
 			message.template,
@@ -97,10 +122,16 @@ export class KavenegarSmsProvider
 		});
 		if (message.parameters[1] !== undefined) body.set("token2", message.parameters[1]);
 		if (message.parameters[2] !== undefined) body.set("token3", message.parameters[2]);
-		return this.send("verify/lookup.json", body, message.signal);
+		return this.requestAndParse(
+			"verify/lookup.json",
+			body,
+			parseKavenegarResponse,
+			message.signal,
+		);
 	}
 
 	async sendBulk(message: KavenegarBulkRequest): Promise<KavenegarBulkResult> {
+		message = parseKavenegarInput(smsBulkMessageSchema, message);
 		validateRecipients(message.recipients);
 		const body = new URLSearchParams({
 			receptor: message.recipients.map(KavenegarSmsProvider.toLocalRecipient).join(","),
@@ -110,7 +141,12 @@ export class KavenegarSmsProvider
 			body.set("sender", message.sender ?? this.sender ?? "");
 		const sendAt = toUnixSeconds(message.sendAt);
 		if (sendAt !== undefined) body.set("date", String(sendAt));
-		const messages = await this.sendMany("sms/send.json", body, message.signal);
+		const messages = await this.requestAndParse(
+			"sms/send.json",
+			body,
+			parseKavenegarSendEntries,
+			message.signal,
+		);
 		return {
 			provider: "kavenegar",
 			messages,
@@ -122,8 +158,8 @@ export class KavenegarSmsProvider
 		messages: readonly KavenegarSendArrayMessage[],
 		options: Readonly<{ signal?: AbortSignal }> = {},
 	): Promise<readonly KavenegarSendResult[]> {
-		if (messages.length === 0)
-			throw new KavenegarError("At least one batch message is required");
+		messages = parseKavenegarInput(z.array(smsBatchMessageSchema).min(1), messages);
+		options = parseKavenegarInput(signalOptionsSchema, options);
 		const body = new URLSearchParams({
 			receptor: JSON.stringify(
 				messages.map((item) => KavenegarSmsProvider.toLocalRecipient(item.recipient)),
@@ -133,77 +169,58 @@ export class KavenegarSmsProvider
 				messages.map((item) => validateRequiredString(item.message, "Message")),
 			),
 		});
-		const response = await this.request("sms/sendarray.json", body, options.signal);
-		const raw = await response.text();
-		const payload = parseKavenegarPayload(response, raw);
-		const entries = Array.isArray(payload.entries)
-			? payload.entries
-			: payload.entries === undefined
-				? []
-				: [payload.entries];
-		return entries.map((entry) => {
-			if (!isRecord(entry))
-				throw new KavenegarError("Kavenegar returned an invalid send-array entry");
-			const messageId = entry.messageid;
-			if (typeof messageId !== "number" && typeof messageId !== "string") {
-				throw new KavenegarError("Kavenegar send-array entry omitted messageid");
-			}
-			return {
-				provider: "kavenegar" as const,
-				messageId: String(messageId),
-				status: "accepted" as const,
-				providerStatus: entry.status === undefined ? undefined : String(entry.status),
-				statusText: typeof entry.statustext === "string" ? entry.statustext : undefined,
-				recipient: typeof entry.receptor === "string" ? entry.receptor : undefined,
-				sender: typeof entry.sender === "string" ? entry.sender : undefined,
-				date: typeof entry.date === "number" ? entry.date : undefined,
-				cost: typeof entry.cost === "number" ? entry.cost : undefined,
-				message: typeof entry.message === "string" ? entry.message : undefined,
-			};
-		});
+		return this.requestAndParse(
+			"sms/sendarray.json",
+			body,
+			parseKavenegarSendArrayResponse,
+			options.signal,
+		);
 	}
 
 	async getDeliveryStatus(
 		query: KavenegarStatusQuery,
 	): Promise<readonly KavenegarStatusResult[]> {
+		query = parseKavenegarInput(deliveryStatusQuerySchema, query);
 		validateIds(query.messageIds, "messageIds");
 		const body = new URLSearchParams({
 			messageid: query.messageIds.map(String).join(","),
 		});
-		return this.parseStatusRequest("sms/status.json", body, query.signal);
+		return this.requestAndParse(
+			"sms/status.json",
+			body,
+			parseKavenegarStatusResponse,
+			query.signal,
+		);
 	}
 
 	async getStatusByLocalId(
 		localIds: readonly (string | number)[],
 	): Promise<readonly KavenegarStatusResult[]> {
+		localIds = parseKavenegarInput(idsInputSchema, localIds);
 		validateIds(localIds, "localIds");
-		return this.parseStatusRequest(
+		return this.requestAndParse(
 			"sms/statusbylocalid.json",
 			new URLSearchParams({ localid: localIds.map(String).join(",") }),
+			parseKavenegarStatusResponse,
 		);
 	}
 
 	async cancelScheduled(
 		input: Readonly<{ ids: readonly (string | number)[] }>,
 	): Promise<readonly KavenegarCancellationResult[]> {
+		input = parseKavenegarInput(cancellationInputSchema, input);
 		validateIds(input.ids, "ids");
 		const response = await this.request(
 			"sms/cancel.json",
 			new URLSearchParams({ messageid: input.ids.map(String).join(",") }),
 		);
-		const raw = await response.text();
-		const payload = parseKavenegarPayload(response, raw);
-		return toEntries(payload.entries).map((entry) => ({
-			provider: "kavenegar",
-			messageId: entry.messageid === undefined ? undefined : String(entry.messageid),
-			providerStatus: entry.status === undefined ? undefined : String(entry.status),
-			statusText: typeof entry.statustext === "string" ? entry.statustext : undefined,
-		}));
+		return parseKavenegarCancellationResponse(response, await response.text());
 	}
 
 	async getReceivedMessages(
 		query: KavenegarReceiveQuery,
 	): Promise<{ items: readonly KavenegarReceivedMessage[] }> {
+		query = parseKavenegarInput(kavenegarReceiveQuerySchema, query);
 		validateRequiredString(query.lineNumber, "Line number");
 		const response = await this.request(
 			"sms/receive.json",
@@ -220,64 +237,50 @@ export class KavenegarSmsProvider
 	async countReceivedMessages(
 		query: KavenegarCountQuery,
 	): Promise<readonly KavenegarCountResult[]> {
+		query = parseKavenegarInput(kavenegarCountQuerySchema, query);
 		const body = new URLSearchParams({ startdate: String(query.startDate) });
 		if (query.endDate !== undefined) body.set("enddate", String(query.endDate));
 		if (query.lineNumber) body.set("linenumber", query.lineNumber);
 		if (query.isRead !== undefined) body.set("isread", query.isRead ? "1" : "0");
-		const response = await this.request("sms/countinbox.json", body, query.signal);
-		const raw = await response.text();
-		const payload = parseKavenegarPayload(response, raw);
-		return toEntries(payload.entries).map((entry) => ({
-			startDate: numberValue(entry.startdate, "startdate"),
-			endDate: numberValue(entry.enddate, "enddate"),
-			count: numberValue(entry.sumcount, "sumcount"),
-		}));
+		return this.requestAndParse(
+			"sms/countinbox.json",
+			body,
+			parseKavenegarCountResponse,
+			query.signal,
+		);
 	}
 
 	async getSentMessages(
 		query: KavenegarSearchQuery,
 	): Promise<readonly KavenegarSendResult[]> {
-		const body = this.searchBody(query);
-		const response = await this.request("sms/select.json", body, query.signal);
-		return parseKavenegarSendEntries(response, await response.text());
+		query = parseKavenegarInput(kavenegarSearchQuerySchema, query);
+		return this.getSentMessagesFrom("sms/select.json", query);
 	}
 
 	async listSentMessages(
 		query: KavenegarSearchQuery,
 	): Promise<readonly KavenegarSendResult[]> {
-		const response = await this.request(
-			"sms/list.json",
-			this.searchBody(query),
-			query.signal,
-		);
-		return parseKavenegarSendEntries(response, await response.text());
+		query = parseKavenegarInput(kavenegarSearchQuerySchema, query);
+		return this.getSentMessagesFrom("sms/list.json", query);
 	}
 
 	async getLatestSentMessages(
 		query: KavenegarSearchQuery,
 	): Promise<readonly KavenegarSendResult[]> {
-		const response = await this.request(
-			"sms/last.json",
-			this.searchBody(query),
-			query.signal,
-		);
-		return parseKavenegarSendEntries(response, await response.text());
+		query = parseKavenegarInput(kavenegarSearchQuerySchema, query);
+		return this.getSentMessagesFrom("sms/last.json", query);
 	}
 
 	async countSentMessages(
 		query: KavenegarSearchQuery,
 	): Promise<readonly KavenegarCountResult[]> {
+		query = parseKavenegarInput(kavenegarSearchQuerySchema, query);
 		const response = await this.request(
 			"sms/count.json",
 			this.searchBody(query),
 			query.signal,
 		);
-		const payload = parseKavenegarPayload(response, await response.text());
-		return toEntries(payload.entries).map((entry) => ({
-			startDate: numberValue(entry.startdate, "startdate"),
-			endDate: numberValue(entry.enddate, "enddate"),
-			count: numberValue(entry.sumcount ?? entry.count, "sumcount"),
-		}));
+		return parseKavenegarCountResponse(response, await response.text());
 	}
 
 	private searchBody(query: KavenegarSearchQuery): URLSearchParams {
@@ -292,31 +295,26 @@ export class KavenegarSmsProvider
 		return body;
 	}
 
-	private async parseStatusRequest(
+	private async getSentMessagesFrom(
 		path: string,
-		body: URLSearchParams,
-		signal?: AbortSignal,
-	): Promise<readonly KavenegarStatusResult[]> {
-		const response = await this.request(path, body, signal);
-		return parseKavenegarStatusResponse(response, await response.text());
-	}
-
-	private async send(
-		path: string,
-		body: URLSearchParams,
-		signal?: AbortSignal,
-	): Promise<KavenegarSendResult> {
-		const response = await this.request(path, body, signal);
-		return parseKavenegarResponse(response, await response.text());
-	}
-
-	private async sendMany(
-		path: string,
-		body: URLSearchParams,
-		signal?: AbortSignal,
+		query: KavenegarSearchQuery,
 	): Promise<readonly KavenegarSendResult[]> {
+		return this.requestAndParse(
+			path,
+			this.searchBody(query),
+			parseKavenegarSendEntries,
+			query.signal,
+		);
+	}
+
+	private async requestAndParse<T>(
+		path: string,
+		body: URLSearchParams,
+		parse: (response: Response, rawResponse: string) => T,
+		signal?: AbortSignal,
+	): Promise<T> {
 		const response = await this.request(path, body, signal);
-		return parseKavenegarSendEntries(response, await response.text());
+		return parse(response, await response.text());
 	}
 
 	private async request(
@@ -341,25 +339,21 @@ export class KavenegarSmsProvider
 	}
 }
 
+function parseKavenegarInput<TSchema extends z.ZodType>(
+	schema: TSchema,
+	value: unknown,
+): z.output<TSchema> {
+	return parseInput(
+		schema,
+		value,
+		(message, cause) => new KavenegarError(message, { cause }),
+	);
+}
+
 function validateIds(ids: readonly (string | number)[], name: string): void {
 	if (ids.length === 0)
 		throw new KavenegarError(`${name} must contain at least one identifier`);
 	for (const id of ids)
 		if (!String(id).trim())
 			throw new KavenegarError(`${name} contains an empty identifier`);
-}
-
-function toEntries(value: unknown): Readonly<Record<string, unknown>>[] {
-	if (Array.isArray(value)) return value.filter(isRecord);
-	return isRecord(value) ? [value] : [];
-}
-
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function numberValue(value: unknown, field: string): number {
-	if (typeof value !== "number" || !Number.isFinite(value))
-		throw new KavenegarError(`Kavenegar response omitted ${field}`);
-	return value;
 }

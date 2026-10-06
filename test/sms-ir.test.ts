@@ -99,4 +99,26 @@ describe("SmsIrProvider", () => {
 			provider.sendTemplate({ recipient: "0912", templateId: 0, parameters: [] }),
 		).rejects.toThrow("positive integer");
 	});
+
+	it("rejects malformed successful payloads without exposing secrets", async () => {
+		const fetcher: SmsHttpFetcher = async () =>
+			response({ status: 1, data: { messageIds: [1] } });
+		const provider = new SmsIrProvider({
+			apiKey: "super-secret-api-key",
+			lineNumber: "3000",
+			fetcher,
+		});
+
+		let error: unknown;
+		try {
+			await provider.sendBulk({ recipients: ["0912"], message: "private message" });
+		} catch (value) {
+			error = value;
+		}
+		expect(error).toBeInstanceOf(Error);
+		const message = (error as Error).message;
+		expect(message).toContain("bulk data");
+		expect(message).not.toContain("super-secret-api-key");
+		expect(message).not.toContain("private message");
+	});
 });
