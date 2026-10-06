@@ -1,0 +1,69 @@
+import type { SmsHttpOptions } from "./http";
+import type {
+	SmsBatchMessage,
+	SmsBulkMessage,
+	SmsBulkSendResult,
+	SmsCancellationResult,
+	SmsDeliveryStatus,
+	SmsDeliveryStatusQuery,
+	SmsReceivedMessage,
+	SmsSendResult,
+	SmsTemplateMessage,
+} from "./sms";
+
+export type KavenegarSmsProviderOptions = Readonly<
+	SmsHttpOptions & {
+		apiKey: string;
+		sender?: string;
+	}
+>;
+
+export type KavenegarSendResult = SmsSendResult &
+	Readonly<{
+		provider: "kavenegar";
+		recipient?: string;
+		sender?: string;
+		statusText?: string;
+		date?: number;
+		cost?: number;
+		message?: string;
+	}>;
+
+export type KavenegarSendArrayMessage = SmsBatchMessage;
+
+export type KavenegarStatusResult = SmsDeliveryStatus & Readonly<{ localId?: string }>;
+
+export type KavenegarBulkRequest = SmsBulkMessage;
+export type KavenegarBulkResult = SmsBulkSendResult;
+export type KavenegarCancellationResult = SmsCancellationResult;
+export type KavenegarReceivedMessage = SmsReceivedMessage;
+
+export type KavenegarStatusQuery = SmsDeliveryStatusQuery;
+
+export type KavenegarReceiveQuery = Readonly<{
+	lineNumber: string;
+	isRead: boolean;
+}>;
+
+export type KavenegarCountQuery = Readonly<{
+	startDate: number;
+	endDate?: number;
+	lineNumber?: string;
+	isRead?: boolean;
+}>;
+
+export type KavenegarCountResult = Readonly<{
+	startDate: number;
+	endDate: number;
+	count: number;
+}>;
+
+export type KavenegarSearchQuery = Readonly<{
+	startDate: number;
+	endDate?: number;
+	lineNumber?: string;
+	page?: number;
+	pageSize?: number;
+}>;
+
+export type KavenegarTemplateMessage = SmsTemplateMessage;

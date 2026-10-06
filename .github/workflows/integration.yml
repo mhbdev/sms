@@ -1,0 +1,24 @@
+name: Provider integration tests
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    environment: provider-integration
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:integration
+        env:
+          KAVENEGAR_API_KEY: ${{ secrets.KAVENEGAR_API_KEY }}
+          SMS_IR_API_KEY: ${{ secrets.SMS_IR_API_KEY }}
+          SMS_IR_LINE_NUMBER: ${{ secrets.SMS_IR_LINE_NUMBER }}

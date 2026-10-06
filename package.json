@@ -1,0 +1,78 @@
+{
+	"name": "@mhbdev/sms",
+	"version": "0.1.0",
+	"description": "Provider-neutral SMS delivery clients for Kavenegar and SMS.ir.",
+	"license": "MIT",
+	"type": "module",
+	"sideEffects": false,
+	"engines": {
+		"node": ">=20"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/mhbdev/sms.git"
+	},
+	"bugs": {
+		"url": "https://github.com/mhbdev/sms/issues"
+	},
+	"homepage": "https://github.com/mhbdev/sms#readme",
+	"keywords": [
+		"sms",
+		"sms.ir",
+		"kavenegar",
+		"iran",
+		"typescript",
+		"otp"
+	],
+	"files": [
+		"dist",
+		"README.md",
+		"LICENSE",
+		"CHANGELOG.md"
+	],
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"default": "./dist/index.js"
+		},
+		"./kavenegar": {
+			"types": "./dist/providers/kavenegar/index.d.ts",
+			"import": "./dist/providers/kavenegar/index.js",
+			"default": "./dist/providers/kavenegar/index.js"
+		},
+		"./sms-ir": {
+			"types": "./dist/providers/sms-ir/index.d.ts",
+			"import": "./dist/providers/sms-ir/index.js",
+			"default": "./dist/providers/sms-ir/index.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"scripts": {
+		"build": "tsc -p tsconfig.build.json",
+		"clean": "node -e \"import('node:fs/promises').then(({rm}) => rm('dist', {recursive:true, force:true}))\"",
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run",
+		"test:integration": "vitest run test/integration --passWithNoTests",
+		"test:watch": "vitest",
+		"lint": "biome check .",
+		"format": "biome format --write .",
+		"pack:check": "npm run build && publint && attw --pack && npm pack --dry-run",
+		"version": "changeset version",
+		"release": "changeset publish"
+	},
+	"devDependencies": {
+		"@arethetypeswrong/cli": "^0.18.2",
+		"@biomejs/biome": "^2.5.6",
+		"@changesets/changelog-github": "^1.0.1",
+		"@changesets/cli": "^3.0.3",
+		"@types/node": "^24.10.1",
+		"publint": "^0.3.25",
+		"typescript": "^5.9.3",
+		"vitest": "^4.1.11"
+	}
+}
