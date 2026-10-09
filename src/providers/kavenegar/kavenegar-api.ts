@@ -7,6 +7,7 @@ import type {
 	KavenegarStatusResult,
 } from "../../contracts/kavenegar.js";
 import { KavenegarError } from "../../errors/kavenegar-error.js";
+import { parseRetryAfterMs } from "../../transport/http.js";
 
 type KavenegarEntry = Readonly<Record<string, unknown>>;
 
@@ -183,6 +184,8 @@ export function parseKavenegarPayload(
 				{
 					httpStatus: response.status,
 					cause: error,
+					retryable: response.status === 429 || response.status >= 500,
+					retryAfterMs: parseRetryAfterMs(response.headers.get("retry-after")),
 				},
 			);
 		}
@@ -206,6 +209,7 @@ export function parseKavenegarPayload(
 			httpStatus: response.status === 200 ? undefined : response.status,
 			providerStatus: status,
 			retryable: response.status === 429 || response.status >= 500,
+			retryAfterMs: parseRetryAfterMs(response.headers.get("retry-after")),
 		});
 	}
 	return {

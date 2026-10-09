@@ -149,4 +149,18 @@ describe("SmsIrProvider", () => {
 		expect(message).not.toContain("super-secret-api-key");
 		expect(message).not.toContain("private message");
 	});
+
+	it("rejects successful bulk payloads without per-recipient IDs", async () => {
+		const fetcher: SmsHttpFetcher = async () =>
+			response({ status: 1, data: { packId: "pack-1", cost: 1 } });
+		const provider = new SmsIrProvider({
+			apiKey: "secret-key",
+			lineNumber: "3000",
+			fetcher,
+		});
+
+		await expect(
+			provider.sendBulk({ recipients: ["0912"], message: "test" }),
+		).rejects.toThrow("bulk data");
+	});
 });

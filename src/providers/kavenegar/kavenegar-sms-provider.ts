@@ -5,6 +5,7 @@ import type {
 	KavenegarCancellationResult,
 	KavenegarCountQuery,
 	KavenegarCountResult,
+	KavenegarOutboxCountQuery,
 	KavenegarReceivedMessage,
 	KavenegarReceiveQuery,
 	KavenegarSearchQuery,
@@ -25,6 +26,7 @@ import type {
 	SmsTemplateSender,
 } from "../../contracts/sms.js";
 import { KavenegarError } from "../../errors/kavenegar-error.js";
+import { SmsProviderError } from "../../errors/sms-error.js";
 import {
 	SmsHttpTransport,
 	toUnixSeconds,
@@ -37,6 +39,7 @@ import {
 	idsInputSchema,
 	kavenegarCountQuerySchema,
 	kavenegarOptionsSchema,
+	kavenegarOutboxCountQuerySchema,
 	kavenegarReceiveQuerySchema,
 	kavenegarSearchQuerySchema,
 	kavenegarSendArrayMessageSchema,
@@ -169,10 +172,13 @@ export class KavenegarSmsProvider
 		options: Readonly<{ signal?: AbortSignal }> = {},
 	): Promise<readonly KavenegarSendResult[]> {
 		messages = parseKavenegarInput(
-			z.array(kavenegarSendArrayMessageSchema).min(1),
+			z.array(kavenegarSendArrayMessageSchema).min(1).max(200),
 			messages,
 		);
 		options = parseKavenegarInput(signalOptionsSchema, options);
+		for (const message of messages) {
+			validateRequiredString(message.sender ?? this.sender ?? "", "Sender");
+		}
 		const body = new URLSearchParams({
 			receptor: JSON.stringify(
 				messages.map((item) => KavenegarSmsProvider.toLocalRecipient(item.recipient)),
@@ -285,14 +291,13 @@ export class KavenegarSmsProvider
 	}
 
 	async countSentMessages(
-		query: KavenegarSearchQuery,
+		query: KavenegarOutboxCountQuery,
 	): Promise<readonly KavenegarCountResult[]> {
-		query = parseKavenegarInput(kavenegarSearchQuerySchema, query);
-		const response = await this.request(
-			"sms/count.json",
-			this.searchBody(query),
-			query.signal,
-		);
+		query = parseKavenegarInput(kavenegarOutboxCountQuerySchema, query);
+		const body = new URLSearchParams({ startdate: String(query.startDate) });
+		if (query.endDate !== undefined) body.set("enddate", String(query.endDate));
+		if (query.status !== undefined) body.set("status", String(query.status));
+		const response = await this.request("sms/countoutbox.json", body, query.signal);
 		return parseKavenegarCountResponse(response, await response.text());
 	}
 
@@ -347,6 +352,15 @@ export class KavenegarSmsProvider
 			);
 		} catch (error) {
 			if (error instanceof KavenegarError) throw error;
+			if (error instanceof SmsProviderError) {
+				throw new KavenegarError("Kavenegar request failed to send", {
+					cause: error,
+					httpStatus: error.httpStatus,
+					providerStatus: error.providerStatus,
+					retryable: error.retryable,
+					retryAfterMs: error.retryAfterMs,
+				});
+			}
 			throw new KavenegarError("Kavenegar request failed to send", { cause: error });
 		}
 	}

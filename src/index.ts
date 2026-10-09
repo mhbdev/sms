@@ -5,6 +5,7 @@ export type {
 	KavenegarCancellationResult,
 	KavenegarCountQuery,
 	KavenegarCountResult,
+	KavenegarOutboxCountQuery,
 	KavenegarReceivedMessage,
 	KavenegarReceiveQuery,
 	KavenegarSendArrayMessage,

@@ -79,6 +79,30 @@ describe("KavenegarSmsProvider", () => {
 		expect(JSON.parse(sendArray.get("sender") ?? "[]")).toEqual(["10004346", "10000000"]);
 	});
 
+	it("requires a sender for every send-array item", async () => {
+		const fetcher = async () => response({ return: { status: 200 }, entries: [] });
+		const provider = new KavenegarSmsProvider({ apiKey: "secret-key", fetcher });
+
+		await expect(
+			provider.sendArray([{ recipient: "0912", message: "test" }]),
+		).rejects.toThrow("Sender is required");
+	});
+
+	it("uses Kavenegar's outbound count endpoint", async () => {
+		let requestedUrl = "";
+		const fetcher = async (input: string | URL | Request) => {
+			requestedUrl = String(input);
+			return response({
+				return: { status: 200 },
+				entries: [{ startdate: 1, enddate: 2, sumcount: 3 }],
+			});
+		};
+		const provider = new KavenegarSmsProvider({ apiKey: "secret-key", fetcher });
+
+		await provider.countSentMessages({ startDate: 1 });
+		expect(requestedUrl).toContain("/sms/countoutbox.json");
+	});
+
 	it("parses status, cancellation, and received-message operations", async () => {
 		const fetcher: SmsHttpFetcher = async (input) => {
 			const url = String(input);

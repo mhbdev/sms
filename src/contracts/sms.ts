@@ -4,7 +4,7 @@ export type SmsMessage = Readonly<{
 	message: string;
 	/** Provider sender number override, when the provider supports sender selection. */
 	sender?: string;
-	sendAt?: number;
+	sendAt?: number | Date;
 	localId?: string | number;
 	tag?: string;
 	signal?: AbortSignal;
@@ -24,7 +24,7 @@ export type SmsBatchMessage = Readonly<{
 	message: string;
 	/** Provider sender number override, when the provider supports sender selection. */
 	sender?: string;
-	sendAt?: number;
+	sendAt?: number | Date;
 	localId?: string | number;
 	signal?: AbortSignal;
 }>;
@@ -35,7 +35,7 @@ export type SmsBulkMessage = Readonly<{
 	message: string;
 	/** Sender number override for the whole bulk request, when supported. */
 	sender?: string;
-	sendAt?: number;
+	sendAt?: number | Date;
 	signal?: AbortSignal;
 }>;
 

@@ -14,7 +14,7 @@ export const positiveIntegerSchema = z
 	.positive({ message: "must be a positive integer" });
 export const localIdSchema = z.union([nonBlankStringSchema, finiteNumberSchema]);
 export const sendAtSchema = z
-	.union([finiteNumberSchema, z.date()])
+	.union([nonNegativeIntegerSchema, z.date().refine((value) => value.getTime() >= 0)])
 	.transform((value) =>
 		value instanceof Date ? Math.floor(value.getTime() / 1_000) : value,
 	);
@@ -23,7 +23,10 @@ export const abortSignalSchema = z.custom<AbortSignal>(
 	(value) =>
 		typeof value === "object" &&
 		value !== null &&
-		typeof (value as { aborted?: unknown }).aborted === "boolean",
+		typeof (value as { aborted?: unknown }).aborted === "boolean" &&
+		typeof (value as { addEventListener?: unknown }).addEventListener === "function" &&
+		typeof (value as { removeEventListener?: unknown }).removeEventListener ===
+			"function",
 );
 
 const functionSchema = z.custom<(...args: never[]) => unknown>(
@@ -39,19 +42,26 @@ const retryPolicySchema = z
 		retryOn: functionSchema.optional(),
 		sleep: functionSchema.optional(),
 	})
-	.loose()
+	.strict()
 	.transform((value): RetryPolicy => value as RetryPolicy);
 
 const transportOptionsSchema = z
 	.object({
 		timeoutMs: positiveIntegerSchema.optional(),
 		fetcher: z.custom<SmsHttpFetcher>((value) => typeof value === "function").optional(),
-		baseUrl: z.string().url().optional(),
+		baseUrl: z
+			.string()
+			.url()
+			.refine((value) => {
+				const protocol = new URL(value).protocol;
+				return protocol === "http:" || protocol === "https:";
+			}, "baseUrl must use http or https")
+			.optional(),
 		defaultHeaders: z.record(z.string(), z.string()).optional(),
 		retry: retryPolicySchema.optional(),
 	})
 	.partial()
-	.loose();
+	.strict();
 
 export const kavenegarOptionsSchema = transportOptionsSchema.extend({
 	apiKey: nonBlankStringSchema,
@@ -60,7 +70,7 @@ export const kavenegarOptionsSchema = transportOptionsSchema.extend({
 
 export const smsIrOptionsSchema = transportOptionsSchema.extend({
 	apiKey: nonBlankStringSchema,
-	lineNumber: z.union([nonBlankStringSchema, finiteNumberSchema]),
+	lineNumber: z.union([nonBlankStringSchema, positiveIntegerSchema]),
 });
 
 export const smsMessageSchema = z
@@ -73,17 +83,17 @@ export const smsMessageSchema = z
 		tag: z.string().optional(),
 		signal: abortSignalSchema.optional(),
 	})
-	.loose();
+	.strict();
 
 export const smsBulkMessageSchema = z
 	.object({
-		recipients: z.array(nonBlankStringSchema).min(1),
+		recipients: z.array(nonBlankStringSchema).min(1).max(200),
 		message: nonBlankStringSchema,
 		sender: nonBlankStringSchema.optional(),
 		sendAt: sendAtSchema.optional(),
 		signal: abortSignalSchema.optional(),
 	})
-	.loose();
+	.strict();
 
 export const smsIrMessageSchema = z
 	.object({
@@ -96,7 +106,7 @@ export const smsIrMessageSchema = z
 
 export const smsIrBulkMessageSchema = z
 	.object({
-		recipients: z.array(nonBlankStringSchema).min(1),
+		recipients: z.array(nonBlankStringSchema).min(1).max(100),
 		message: nonBlankStringSchema,
 		sendAt: sendAtSchema.optional(),
 		signal: abortSignalSchema.optional(),
@@ -112,7 +122,7 @@ export const smsBatchMessageSchema = z
 		localId: localIdSchema.optional(),
 		signal: abortSignalSchema.optional(),
 	})
-	.loose();
+	.strict();
 
 export const kavenegarSendArrayMessageSchema = z
 	.object({
@@ -124,18 +134,18 @@ export const kavenegarSendArrayMessageSchema = z
 
 export const signalOptionsSchema = z
 	.object({ signal: abortSignalSchema.optional() })
-	.loose();
+	.strict();
 
 export const idsInputSchema = z.array(localIdSchema).min(1);
 
-export const cancellationInputSchema = z.object({ ids: idsInputSchema }).loose();
+export const cancellationInputSchema = z.object({ ids: idsInputSchema }).strict();
 
 export const deliveryStatusQuerySchema = z
 	.object({
 		messageIds: idsInputSchema,
 		signal: abortSignalSchema.optional(),
 	})
-	.loose();
+	.strict();
 
 export const kavenegarTemplateSchema = z
 	.object({
@@ -144,7 +154,7 @@ export const kavenegarTemplateSchema = z
 		parameters: z.array(z.string()).min(1).max(3),
 		signal: abortSignalSchema.optional(),
 	})
-	.loose();
+	.strict();
 
 export const kavenegarReceiveQuerySchema = z
 	.object({
@@ -152,7 +162,7 @@ export const kavenegarReceiveQuerySchema = z
 		isRead: z.boolean(),
 		signal: abortSignalSchema.optional(),
 	})
-	.loose();
+	.strict();
 
 export const kavenegarCountQuerySchema = z
 	.object({
@@ -162,7 +172,11 @@ export const kavenegarCountQuerySchema = z
 		isRead: z.boolean().optional(),
 		signal: abortSignalSchema.optional(),
 	})
-	.loose();
+	.strict()
+	.refine((value) => value.endDate === undefined || value.endDate >= value.startDate, {
+		message: "endDate must be greater than or equal to startDate",
+		path: ["endDate"],
+	});
 
 export const kavenegarSearchQuerySchema = z
 	.object({
@@ -174,7 +188,24 @@ export const kavenegarSearchQuerySchema = z
 		pageSize: positiveIntegerSchema.optional(),
 		signal: abortSignalSchema.optional(),
 	})
-	.loose();
+	.strict()
+	.refine((value) => value.endDate === undefined || value.endDate >= value.startDate, {
+		message: "endDate must be greater than or equal to startDate",
+		path: ["endDate"],
+	});
+
+export const kavenegarOutboxCountQuerySchema = z
+	.object({
+		startDate: nonNegativeIntegerSchema,
+		endDate: nonNegativeIntegerSchema.optional(),
+		status: nonNegativeIntegerSchema.optional(),
+		signal: abortSignalSchema.optional(),
+	})
+	.strict()
+	.refine((value) => value.endDate === undefined || value.endDate >= value.startDate, {
+		message: "endDate must be greater than or equal to startDate",
+		path: ["endDate"],
+	});
 
 export const smsIrTemplateSchema = z
 	.object({
@@ -188,12 +219,12 @@ export const smsIrTemplateSchema = z
 		),
 		signal: abortSignalSchema.optional(),
 	})
-	.loose();
+	.strict();
 
 export const smsIrLikeToLikeSchema = z
 	.object({
-		recipients: z.array(nonBlankStringSchema).min(1),
-		messages: z.array(nonBlankStringSchema).min(1),
+		recipients: z.array(nonBlankStringSchema).min(1).max(100),
+		messages: z.array(nonBlankStringSchema).min(1).max(100),
 		sendAt: sendAtSchema.optional(),
 		signal: abortSignalSchema.optional(),
 	})
@@ -201,7 +232,7 @@ export const smsIrLikeToLikeSchema = z
 		message: "Recipients and messages must have equal lengths",
 		path: ["messages"],
 	})
-	.loose();
+	.strict();
 
 export const packQuerySchema = z
 	.object({
@@ -209,7 +240,7 @@ export const packQuerySchema = z
 		pageSize: positiveIntegerSchema.optional(),
 		signal: abortSignalSchema.optional(),
 	})
-	.loose();
+	.strict();
 
 export function formatZodIssues(error: z.ZodError): string {
 	return error.issues

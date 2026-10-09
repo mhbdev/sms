@@ -64,6 +64,13 @@ export type KavenegarCountResult = Readonly<{
 	count: number;
 }>;
 
+export type KavenegarOutboxCountQuery = Readonly<{
+	startDate: number;
+	endDate?: number;
+	status?: number;
+	signal?: AbortSignal;
+}>;
+
 export type KavenegarSearchQuery = Readonly<{
 	messageIds?: readonly (string | number)[];
 	startDate: number;

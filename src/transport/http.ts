@@ -56,17 +56,27 @@ export class SmsHttpTransport {
 			try {
 				const response = await this.fetchOnce(input, init, options);
 				if (attempt < maxAttempts && this.shouldRetry({ attempt, response })) {
+					await response.body?.cancel();
 					await this.waitBeforeRetry(attempt, response, options.signal);
 					continue;
 				}
 				return response;
 			} catch (error) {
+				if (options.signal?.aborted) {
+					throw new SmsTransportError("SMS request was aborted", {
+						cause: error,
+						retryable: false,
+					});
+				}
 				if (attempt < maxAttempts && this.shouldRetry({ attempt, error })) {
 					await this.waitBeforeRetry(attempt, undefined, options.signal);
 					continue;
 				}
 				if (error instanceof SmsTransportError) throw error;
-				throw new SmsTransportError("SMS request failed to send", { cause: error });
+				throw new SmsTransportError("SMS request failed to send", {
+					cause: error,
+					retryable: true,
+				});
 			}
 		}
 		throw new SmsTransportError("SMS request exhausted its retry policy");
@@ -79,15 +89,19 @@ export class SmsHttpTransport {
 	): Promise<Response> {
 		const controller = new AbortController();
 		const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
-		const externalAbort = () => controller.abort();
-		if (options.signal?.aborted) controller.abort();
+		const externalAbort = () => controller.abort(options.signal?.reason);
+		if (options.signal?.aborted) controller.abort(options.signal.reason);
 		options.signal?.addEventListener("abort", externalAbort, { once: true });
 		try {
-			return await this.fetcher(input, {
+			const response = await this.fetcher(input, {
 				...init,
-				headers: { ...this.defaultHeaders, ...init.headers },
+				headers: mergeHeaders(this.defaultHeaders, init.headers),
 				signal: controller.signal,
 			});
+			if (options.signal?.aborted) {
+				throw options.signal.reason ?? createAbortError();
+			}
+			return response;
 		} finally {
 			clearTimeout(timeout);
 			options.signal?.removeEventListener("abort", externalAbort);
@@ -116,13 +130,13 @@ export class SmsHttpTransport {
 		const maxDelayMs = policy.maxDelayMs ?? 5_000;
 		const multiplier = policy.backoffMultiplier ?? 2;
 		const retryAfter = response
-			? parseRetryAfter(response.headers.get("retry-after"))
+			? parseRetryAfterMs(response.headers.get("retry-after"))
 			: undefined;
 		const backoff = Math.min(
 			maxDelayMs,
 			initialDelayMs * multiplier ** Math.max(0, attempt - 1),
 		);
-		await (policy.sleep ?? sleep)(retryAfter ?? backoff, signal);
+		await (policy.sleep ?? sleep)(Math.min(maxDelayMs, retryAfter ?? backoff), signal);
 	}
 }
 
@@ -147,7 +161,7 @@ function validateRetryPolicy(policy: RetryPolicy | undefined): void {
 	}
 }
 
-function parseRetryAfter(value: string | null): number | undefined {
+export function parseRetryAfterMs(value: string | null): number | undefined {
 	if (!value) return undefined;
 	const seconds = Number(value);
 	if (Number.isFinite(seconds)) return Math.max(0, seconds * 1_000);
@@ -157,16 +171,42 @@ function parseRetryAfter(value: string | null): number | undefined {
 
 async function sleep(delayMs: number, signal?: AbortSignal): Promise<void> {
 	await new Promise<void>((resolve, reject) => {
-		const timeout = setTimeout(resolve, delayMs);
+		let settled = false;
+		const timeout = setTimeout(() => {
+			settled = true;
+			signal?.removeEventListener("abort", abort);
+			resolve();
+		}, delayMs);
 		const abort = () => {
+			if (settled) return;
+			settled = true;
 			clearTimeout(timeout);
+			signal?.removeEventListener("abort", abort);
 			reject(
 				signal?.reason ?? new DOMException("The operation was aborted", "AbortError"),
 			);
 		};
-		if (signal?.aborted) abort();
+		if (signal?.aborted) {
+			abort();
+			return;
+		}
 		signal?.addEventListener("abort", abort, { once: true });
 	});
+}
+
+function mergeHeaders(
+	defaults: Readonly<Record<string, string>>,
+	initHeaders: HeadersInit | undefined,
+): Headers {
+	const headers = new Headers(defaults);
+	new Headers(initHeaders).forEach((value, key) => {
+		headers.set(key, value);
+	});
+	return headers;
+}
+
+function createAbortError(): DOMException {
+	return new DOMException("The operation was aborted", "AbortError");
 }
 
 export function validateRequiredString(value: string, name: string): string {

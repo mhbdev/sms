@@ -23,6 +23,7 @@ import type {
 	SmsIrStatusQuery,
 	SmsIrTemplateMessage,
 } from "../../contracts/sms-ir.js";
+import { SmsProviderError } from "../../errors/sms-error.js";
 import { SmsIrError } from "../../errors/sms-ir-error.js";
 import {
 	SmsHttpTransport,
@@ -250,14 +251,28 @@ export class SmsIrProvider
 		method = "POST",
 		signal?: AbortSignal,
 	): Promise<Response> {
-		return this.transport.request(
-			`${this.baseUrl}/${path}`,
-			{
-				method,
-				...(body === undefined ? {} : { body: JSON.stringify(body) }),
-			},
-			{ signal },
-		);
+		try {
+			return await this.transport.request(
+				`${this.baseUrl}/${path}`,
+				{
+					method,
+					...(body === undefined ? {} : { body: JSON.stringify(body) }),
+				},
+				{ signal },
+			);
+		} catch (error) {
+			if (error instanceof SmsIrError) throw error;
+			if (error instanceof SmsProviderError) {
+				throw new SmsIrError("SMS.ir request failed to send", {
+					cause: error,
+					httpStatus: error.httpStatus,
+					providerStatus: error.providerStatus,
+					retryable: error.retryable,
+					retryAfterMs: error.retryAfterMs,
+				});
+			}
+			throw new SmsIrError("SMS.ir request failed to send", { cause: error });
+		}
 	}
 
 	private toBulkSendResult(
@@ -265,6 +280,11 @@ export class SmsIrProvider
 		sendAt: number | Date | undefined,
 		result: SmsIrSendResult,
 	): SmsIrBulkSendResult {
+		if (!result.messageIds || result.messageIds.length !== recipients.length) {
+			throw new SmsIrError(
+				"SMS.ir response returned a message ID count that does not match the recipients",
+			);
+		}
 		return {
 			provider: "sms.ir",
 			batchId: result.batchId,

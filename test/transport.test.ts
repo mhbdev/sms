@@ -32,4 +32,44 @@ describe("SmsHttpTransport", () => {
 		expect(response.status).toBe(200);
 		expect(fetcher).toHaveBeenCalledTimes(2);
 	});
+
+	it("does not retry a caller abort", async () => {
+		const controller = new AbortController();
+		const fetcher = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+			controller.abort(new Error("caller cancelled"));
+			throw init?.signal?.reason ?? new Error("request was not aborted");
+		});
+		const sleep = vi.fn(async () => undefined);
+		const transport = new SmsHttpTransport({
+			fetcher,
+			timeoutMs: 100,
+			retry: { maxAttempts: 3, sleep },
+		});
+
+		await expect(
+			transport.request(
+				"https://example.test",
+				{ method: "GET" },
+				{ signal: controller.signal },
+			),
+		).rejects.toMatchObject({ code: "SMS_TRANSPORT_ERROR", retryable: false });
+		expect(fetcher).toHaveBeenCalledTimes(1);
+		expect(sleep).not.toHaveBeenCalled();
+	});
+
+	it("caps Retry-After delays at the configured maximum", async () => {
+		const fetcher = vi.fn(
+			async () =>
+				new Response("retry", { status: 429, headers: { "Retry-After": "120" } }),
+		);
+		const sleep = vi.fn(async () => undefined);
+		const transport = new SmsHttpTransport({
+			fetcher,
+			timeoutMs: 100,
+			retry: { maxAttempts: 2, maxDelayMs: 250, sleep },
+		});
+
+		await transport.request("https://example.test", { method: "GET" });
+		expect(sleep).toHaveBeenCalledWith(250, undefined);
+	});
 });

@@ -7,6 +7,7 @@ import type {
 	SmsIrSendResult,
 } from "../../contracts/sms-ir.js";
 import { SmsIrError } from "../../errors/sms-ir-error.js";
+import { parseRetryAfterMs } from "../../transport/http.js";
 
 type SmsIrPayload = Readonly<{ status: number; message?: string; data?: unknown }>;
 
@@ -27,7 +28,7 @@ const sendDataSchema = z
 const bulkDataSchema = z
 	.object({
 		packId: stringLikeSchema,
-		messageIds: z.array(z.union([stringLikeSchema, z.null()])).optional(),
+		messageIds: z.array(z.union([stringLikeSchema, z.null()])).min(1),
 		cost: z.number().finite().optional(),
 	})
 	.loose();
@@ -65,6 +66,8 @@ export function parseSmsIrPayload(response: Response, rawResponse: string): SmsI
 		throw new SmsIrError("SMS.ir returned a non-JSON response", {
 			httpStatus: response.status,
 			cause: error,
+			retryable: response.status === 429 || response.status >= 500,
+			retryAfterMs: parseRetryAfterMs(response.headers.get("retry-after")),
 		});
 	}
 	const parsed = payloadSchema.safeParse(value);
@@ -72,6 +75,8 @@ export function parseSmsIrPayload(response: Response, rawResponse: string): SmsI
 		throw new SmsIrError("SMS.ir returned an invalid response payload", {
 			httpStatus: response.status,
 			cause: parsed.error,
+			retryable: response.status === 429 || response.status >= 500,
+			retryAfterMs: parseRetryAfterMs(response.headers.get("retry-after")),
 		});
 	}
 	const message = parsed.data.message;
@@ -80,6 +85,7 @@ export function parseSmsIrPayload(response: Response, rawResponse: string): SmsI
 			httpStatus: response.status,
 			providerStatus: parsed.data.status,
 			retryable: response.status === 429 || response.status >= 500,
+			retryAfterMs: parseRetryAfterMs(response.headers.get("retry-after")),
 		});
 	}
 	return {
