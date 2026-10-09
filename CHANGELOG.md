@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.1
+
+### Patch Changes
+
+- [`e1c3d90`](https://github.com/mhbdev/sms/commit/e1c3d905dd19bc0fb7836401cb0554664e785349) Thanks [@mhbdev](https://github.com/mhbdev)! - Modernize GitHub Actions security and CI dependencies while preserving Node 20 compatibility and the existing public API.
+
 ## 0.2.0
 
 ### Minor Changes
