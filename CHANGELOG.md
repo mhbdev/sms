@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.2
+
+### Patch Changes
+
+- [`5f631f4`](https://github.com/mhbdev/sms/commit/5f631f4fe7cb8e0174b4bd2749d7b5afab4ed80c) Thanks [@mhbdev](https://github.com/mhbdev)! - Fix Kavenegar outbound reporting, harden transport cancellation and bounded retry behavior, enforce provider response cardinality, and strengthen runtime input validation.
+
 ## 0.2.1
 
 ### Patch Changes
