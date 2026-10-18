@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.3
+
+### Patch Changes
+
+- [#12](https://github.com/mhbdev/sms/pull/12) [`1bca296`](https://github.com/mhbdev/sms/commit/1bca29622247b1f6297d57d921ecee0da83d22e8) Thanks [@mhbdev](https://github.com/mhbdev)! - Add `SmsProviderPool` with pluggable priority and weighted round-robin routing,
+  provider health tracking, safe send retry/failover, and typed adapters for
+  provider-specific batch operations. Send requests no longer use the legacy HTTP
+  retry policy; uncertain delivery outcomes stop with an explicit pool error.
+
 ## 0.2.2
 
 ### Patch Changes
