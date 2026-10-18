@@ -112,6 +112,7 @@ export class KavenegarSmsProvider
 			body,
 			parseKavenegarResponse,
 			input.signal,
+			false,
 		);
 	}
 
@@ -140,6 +141,7 @@ export class KavenegarSmsProvider
 			body,
 			parseKavenegarResponse,
 			message.signal,
+			false,
 		);
 	}
 
@@ -159,6 +161,7 @@ export class KavenegarSmsProvider
 			body,
 			parseKavenegarSendEntries,
 			message.signal,
+			false,
 		);
 		return {
 			provider: "kavenegar",
@@ -193,6 +196,7 @@ export class KavenegarSmsProvider
 			body,
 			parseKavenegarSendArrayResponse,
 			options.signal,
+			false,
 		);
 	}
 
@@ -330,8 +334,9 @@ export class KavenegarSmsProvider
 		body: URLSearchParams,
 		parse: (response: Response, rawResponse: string) => T,
 		signal?: AbortSignal,
+		retry = true,
 	): Promise<T> {
-		const response = await this.request(path, body, signal);
+		const response = await this.request(path, body, signal, retry);
 		return parse(response, await response.text());
 	}
 
@@ -339,6 +344,7 @@ export class KavenegarSmsProvider
 		path: string,
 		body: URLSearchParams,
 		signal?: AbortSignal,
+		retry = true,
 	): Promise<Response> {
 		try {
 			return await this.transport.request(
@@ -348,7 +354,7 @@ export class KavenegarSmsProvider
 					headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
 					body: body.toString(),
 				},
-				{ signal },
+				{ signal, retry },
 			);
 		} catch (error) {
 			if (error instanceof KavenegarError) throw error;
@@ -359,6 +365,7 @@ export class KavenegarSmsProvider
 					providerStatus: error.providerStatus,
 					retryable: error.retryable,
 					retryAfterMs: error.retryAfterMs,
+					deliveryOutcome: error.deliveryOutcome,
 				});
 			}
 			throw new KavenegarError("Kavenegar request failed to send", { cause: error });

@@ -128,6 +128,24 @@ describe("SmsIrProvider", () => {
 		).rejects.toThrow("positive integer");
 	});
 
+	it("does not replay send requests through the legacy HTTP retry option", async () => {
+		let calls = 0;
+		const provider = new SmsIrProvider({
+			apiKey: "secret-key",
+			lineNumber: "3000",
+			retry: { maxAttempts: 3, initialDelayMs: 0, sleep: async () => undefined },
+			fetcher: async () => {
+				calls += 1;
+				return new Response("unavailable", { status: 503 });
+			},
+		});
+
+		await expect(
+			provider.sendMessage({ recipient: "0912", message: "hello" }),
+		).rejects.toBeInstanceOf(Error);
+		expect(calls).toBe(1);
+	});
+
 	it("rejects malformed successful payloads without exposing secrets", async () => {
 		const fetcher: SmsHttpFetcher = async () =>
 			response({ status: 1, data: { messageIds: [1] } });

@@ -18,6 +18,8 @@ export type RetryPolicy = Readonly<{
 
 export type RequestOptions = Readonly<{
 	signal?: AbortSignal;
+	/** Disable transport retries for side-effecting operations such as SMS sends. */
+	retry?: boolean;
 }>;
 
 const RETRYABLE_STATUS_CODES = new Set([408, 425, 429]);
@@ -51,7 +53,7 @@ export class SmsHttpTransport {
 		init: RequestInit,
 		options: RequestOptions = {},
 	): Promise<Response> {
-		const maxAttempts = this.retry?.maxAttempts ?? 1;
+		const maxAttempts = options.retry === false ? 1 : (this.retry?.maxAttempts ?? 1);
 		for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
 			try {
 				const response = await this.fetchOnce(input, init, options);

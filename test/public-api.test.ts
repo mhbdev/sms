@@ -11,6 +11,10 @@ describe("public entrypoints", () => {
 		expect(root.SmsIrSmsProvider).toBe(root.SmsIrProvider);
 		expect(root.KavenegarError).toBe(kavenegar.KavenegarError);
 		expect(root.SmsIrError).toBe(smsIr.SmsIrError);
+		expect(root.SmsProviderPool).toBeTypeOf("function");
+		expect(root.InMemoryCircuitBreaker).toBeTypeOf("function");
+		expect(root.PriorityRoutingStrategy).toBeTypeOf("function");
+		expect(root.WeightedRoundRobinStrategy).toBeTypeOf("function");
 	});
 
 	it("retain parser exports on provider entrypoints", () => {

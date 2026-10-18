@@ -5,6 +5,8 @@ export type SmsErrorOptions = Readonly<{
 	providerStatus?: number | string;
 	retryable?: boolean;
 	retryAfterMs?: number;
+	/** Whether a send was definitely rejected or may have been accepted. */
+	deliveryOutcome?: "rejected" | "unknown";
 }>;
 
 export class SmsProviderError extends Error {
@@ -14,6 +16,7 @@ export class SmsProviderError extends Error {
 	readonly providerStatus?: number | string;
 	readonly retryable?: boolean;
 	readonly retryAfterMs?: number;
+	readonly deliveryOutcome?: "rejected" | "unknown";
 
 	constructor(message: string, options: SmsErrorOptions = {}) {
 		super(message, { cause: options.cause });
@@ -23,6 +26,7 @@ export class SmsProviderError extends Error {
 		this.providerStatus = options.providerStatus;
 		this.retryable = options.retryable;
 		this.retryAfterMs = options.retryAfterMs;
+		this.deliveryOutcome = options.deliveryOutcome;
 	}
 }
 

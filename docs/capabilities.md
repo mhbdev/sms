@@ -19,6 +19,11 @@ All provider clients accept an injected `fetcher`, timeout, custom base URL,
 additional headers, and an optional retry policy. Retry is disabled unless
 `retry.maxAttempts` is explicitly configured.
 
+Send requests are never replayed by the provider HTTP transport. The
+`SmsProviderPool` owns safe retry/failover decisions, stopping on uncertain
+delivery outcomes. See the README's provider-pool section for routing strategies,
+health management, and typed adapters.
+
 The capability contracts are generic. This keeps provider-specific request and
 result types precise while allowing shared code to depend on
 `SmsMessageSender`, `SmsTemplateSender`, `SmsBulkSender`,

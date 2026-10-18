@@ -114,7 +114,7 @@ export class SmsIrProvider
 			mobiles: input.recipients,
 			sendDateTime: toUnixSeconds(input.sendAt) ?? null,
 		};
-		const response = await this.request("send/bulk", body, "POST", input.signal);
+		const response = await this.request("send/bulk", body, "POST", input.signal, false);
 		const result = parseSmsIrBulkResult(response, await response.text());
 		return this.toBulkSendResult(input.recipients, input.sendAt, result);
 	}
@@ -137,6 +137,7 @@ export class SmsIrProvider
 			},
 			"POST",
 			input.signal,
+			false,
 		);
 		const result = parseSmsIrBulkResult(response, await response.text());
 		return this.toBulkSendResult(input.recipients, input.sendAt, result);
@@ -156,6 +157,7 @@ export class SmsIrProvider
 			},
 			"POST",
 			input.signal,
+			false,
 		);
 		return parseSmsIrSendResult(response, await response.text());
 	}
@@ -250,6 +252,7 @@ export class SmsIrProvider
 		body?: unknown,
 		method = "POST",
 		signal?: AbortSignal,
+		retry = true,
 	): Promise<Response> {
 		try {
 			return await this.transport.request(
@@ -258,7 +261,7 @@ export class SmsIrProvider
 					method,
 					...(body === undefined ? {} : { body: JSON.stringify(body) }),
 				},
-				{ signal },
+				{ signal, retry },
 			);
 		} catch (error) {
 			if (error instanceof SmsIrError) throw error;
@@ -269,6 +272,7 @@ export class SmsIrProvider
 					providerStatus: error.providerStatus,
 					retryable: error.retryable,
 					retryAfterMs: error.retryAfterMs,
+					deliveryOutcome: error.deliveryOutcome,
 				});
 			}
 			throw new SmsIrError("SMS.ir request failed to send", { cause: error });
