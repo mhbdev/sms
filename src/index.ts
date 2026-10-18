@@ -16,6 +16,21 @@ export type {
 	KavenegarTemplateMessage,
 } from "./contracts/kavenegar.js";
 export type {
+	SmsPoolAttempt,
+	SmsPoolBatchInput,
+	SmsPoolBatchResult,
+	SmsPoolEvent,
+	SmsPoolFailureClassification,
+	SmsPoolLikeToLikeInput,
+	SmsPoolOperation,
+	SmsProviderCircuitState,
+	SmsProviderHealth,
+	SmsProviderPoolEntry,
+	SmsProviderPoolOptions,
+	SmsRoutingContext,
+	SmsRoutingStrategy,
+} from "./contracts/pool.js";
+export type {
 	SmsBatchMessage,
 	SmsBulkMessage,
 	SmsBulkSender,
@@ -62,6 +77,13 @@ export {
 	SmsValidationError,
 } from "./errors/sms-error.js";
 export { SmsIrError } from "./errors/sms-ir-error.js";
+export type { InMemoryCircuitBreakerOptions } from "./pool/health.js";
+export { InMemoryCircuitBreaker } from "./pool/health.js";
+export { SmsProviderPool, SmsProviderPoolError } from "./pool/sms-provider-pool.js";
+export {
+	PriorityRoutingStrategy,
+	WeightedRoundRobinStrategy,
+} from "./pool/strategies.js";
 export {
 	parseKavenegarCancellationResponse,
 	parseKavenegarCountResponse,

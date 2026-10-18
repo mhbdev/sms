@@ -88,6 +88,23 @@ describe("KavenegarSmsProvider", () => {
 		).rejects.toThrow("Sender is required");
 	});
 
+	it("does not replay send requests through the legacy HTTP retry option", async () => {
+		let calls = 0;
+		const provider = new KavenegarSmsProvider({
+			apiKey: "secret-key",
+			retry: { maxAttempts: 3, initialDelayMs: 0, sleep: async () => undefined },
+			fetcher: async () => {
+				calls += 1;
+				return new Response("unavailable", { status: 503 });
+			},
+		});
+
+		await expect(
+			provider.sendMessage({ recipient: "0912", message: "hello" }),
+		).rejects.toBeInstanceOf(Error);
+		expect(calls).toBe(1);
+	});
+
 	it("uses Kavenegar's outbound count endpoint", async () => {
 		let requestedUrl = "";
 		const fetcher = async (input: string | URL | Request) => {

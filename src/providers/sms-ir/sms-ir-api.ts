@@ -67,6 +67,11 @@ export function parseSmsIrPayload(response: Response, rawResponse: string): SmsI
 			httpStatus: response.status,
 			cause: error,
 			retryable: response.status === 429 || response.status >= 500,
+			deliveryOutcome:
+				response.status === 429 ||
+				(response.status >= 400 && response.status < 500 && response.status !== 408)
+					? "rejected"
+					: "unknown",
 			retryAfterMs: parseRetryAfterMs(response.headers.get("retry-after")),
 		});
 	}
@@ -76,6 +81,11 @@ export function parseSmsIrPayload(response: Response, rawResponse: string): SmsI
 			httpStatus: response.status,
 			cause: parsed.error,
 			retryable: response.status === 429 || response.status >= 500,
+			deliveryOutcome:
+				response.status === 429 ||
+				(response.status >= 400 && response.status < 500 && response.status !== 408)
+					? "rejected"
+					: "unknown",
 			retryAfterMs: parseRetryAfterMs(response.headers.get("retry-after")),
 		});
 	}
@@ -85,6 +95,12 @@ export function parseSmsIrPayload(response: Response, rawResponse: string): SmsI
 			httpStatus: response.status,
 			providerStatus: parsed.data.status,
 			retryable: response.status === 429 || response.status >= 500,
+			deliveryOutcome: response.ok
+				? "rejected"
+				: response.status === 429 ||
+						(response.status >= 400 && response.status < 500 && response.status !== 408)
+					? "rejected"
+					: "unknown",
 			retryAfterMs: parseRetryAfterMs(response.headers.get("retry-after")),
 		});
 	}

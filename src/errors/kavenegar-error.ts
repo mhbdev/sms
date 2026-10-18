@@ -9,6 +9,7 @@ export class KavenegarError extends SmsProviderError {
 			providerStatus?: number | string;
 			retryable?: boolean;
 			retryAfterMs?: number;
+			deliveryOutcome?: "rejected" | "unknown";
 		}> = {},
 	) {
 		super(message, {

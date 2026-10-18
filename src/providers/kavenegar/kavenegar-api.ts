@@ -185,6 +185,11 @@ export function parseKavenegarPayload(
 					httpStatus: response.status,
 					cause: error,
 					retryable: response.status === 429 || response.status >= 500,
+					deliveryOutcome:
+						response.status === 429 ||
+						(response.status >= 400 && response.status < 500 && response.status !== 408)
+							? "rejected"
+							: "unknown",
 					retryAfterMs: parseRetryAfterMs(response.headers.get("retry-after")),
 				},
 			);
@@ -209,6 +214,12 @@ export function parseKavenegarPayload(
 			httpStatus: response.status === 200 ? undefined : response.status,
 			providerStatus: status,
 			retryable: response.status === 429 || response.status >= 500,
+			deliveryOutcome: response.ok
+				? "rejected"
+				: response.status === 429 ||
+						(response.status >= 400 && response.status < 500 && response.status !== 408)
+					? "rejected"
+					: "unknown",
 			retryAfterMs: parseRetryAfterMs(response.headers.get("retry-after")),
 		});
 	}
