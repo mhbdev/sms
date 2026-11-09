@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.4
+
+### Patch Changes
+
+- [#16](https://github.com/mhbdev/sms/pull/16) [`d248189`](https://github.com/mhbdev/sms/commit/d24818936f4b5be4362f7dce72d59e4c586e5625) Thanks [@dependabot](https://github.com/apps/dependabot)! - Update the runtime Zod dependency to 4.6.7 to include upstream security fixes.
+
 ## 0.2.3
 
 ### Patch Changes
