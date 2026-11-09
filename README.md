@@ -21,19 +21,19 @@ npm install @mhbdev/sms
 import { KavenegarSmsProvider } from "@mhbdev/sms/kavenegar";
 
 const sms = new KavenegarSmsProvider({
-  apiKey: process.env.KAVENEGAR_API_KEY!,
-  sender: "90005738",
+	apiKey: process.env.KAVENEGAR_API_KEY!,
+	sender: "90005738",
 });
 
 await sms.sendMessage({
-  recipient: "+989121234567",
-  message: "Your order is ready.",
+	recipient: "+989121234567",
+	message: "Your order is ready.",
 });
 
 await sms.sendTemplate({
-  recipient: "+989121234567",
-  template: "my-otp-pattern",
-  parameters: ["123456"],
+	recipient: "+989121234567",
+	template: "my-otp-pattern",
+	parameters: ["123456"],
 });
 ```
 
@@ -42,9 +42,9 @@ options is the default sender number. A message-level `sender` overrides it:
 
 ```ts
 await sms.sendMessage({
-  recipient: "+989121234567",
-  message: "Sent from a specific line.",
-  sender: "10004346",
+	recipient: "+989121234567",
+	message: "Sent from a specific line.",
+	sender: "10004346",
 });
 ```
 
@@ -58,19 +58,19 @@ returned by Kavenegar is preserved in the normalized result when provided.
 import { SmsIrProvider } from "@mhbdev/sms/sms-ir";
 
 const sms = new SmsIrProvider({
-  apiKey: process.env.SMS_IR_API_KEY!,
-  lineNumber: "300000000000",
+	apiKey: process.env.SMS_IR_API_KEY!,
+	lineNumber: "300000000000",
 });
 
 await sms.sendMessage({
-  recipient: "09121234567",
-  message: "Your order is ready.",
+	recipient: "09121234567",
+	message: "Your order is ready.",
 });
 
 await sms.sendTemplate({
-  recipient: "09121234567",
-  templateId: 123456,
-  parameters: [{ name: "CODE", value: "123456" }],
+	recipient: "09121234567",
+	templateId: 123456,
+	parameters: [{ name: "CODE", value: "123456" }],
 });
 ```
 
@@ -106,13 +106,13 @@ because retrying after an unknown provider response can duplicate a paid SMS.
 
 ```ts
 const sms = new SmsIrProvider({
-  apiKey: process.env.SMS_IR_API_KEY!,
-  lineNumber: "300000000000",
-  retry: {
-    maxAttempts: 3,
-    initialDelayMs: 250,
-    maxDelayMs: 2_000,
-  },
+	apiKey: process.env.SMS_IR_API_KEY!,
+	lineNumber: "300000000000",
+	retry: {
+		maxAttempts: 3,
+		initialDelayMs: 250,
+		maxDelayMs: 2_000,
+	},
 });
 ```
 
@@ -135,46 +135,47 @@ operation is skipped.
 
 ```ts
 import {
-  PriorityRoutingStrategy,
-  SmsProviderPool,
-  WeightedRoundRobinStrategy,
+	PriorityRoutingStrategy,
+	SmsProviderPool,
+	WeightedRoundRobinStrategy,
 } from "@mhbdev/sms";
 import { KavenegarSmsProvider } from "@mhbdev/sms/kavenegar";
 import { SmsIrProvider } from "@mhbdev/sms/sms-ir";
 
 const kavenegar = new KavenegarSmsProvider({
-  apiKey: process.env.KAVENEGAR_API_KEY!,
-  sender: "90005738",
+	apiKey: process.env.KAVENEGAR_API_KEY!,
+	sender: "90005738",
 });
 const smsIr = new SmsIrProvider({
-  apiKey: process.env.SMS_IR_API_KEY!,
-  lineNumber: "300000000000",
+	apiKey: process.env.SMS_IR_API_KEY!,
+	lineNumber: "300000000000",
 });
 
 const pool = new SmsProviderPool({
-  strategy: new PriorityRoutingStrategy(), // Or new WeightedRoundRobinStrategy()
-  providers: [
-    {
-      name: "kavenegar",
-      priority: 1,
-      sendMessage: (message) => kavenegar.sendMessage(message),
-      sendTemplate: (message) => kavenegar.sendTemplate(message),
-      sendBulk: (message) => kavenegar.sendBulk(message),
-    },
-    {
-      name: "sms.ir",
-      priority: 2,
-      weight: 2,
-      sendMessage: (message) => smsIr.sendMessage({
-        recipient: message.recipient,
-        message: message.message,
-        sendAt: message.sendAt,
-        signal: message.signal,
-      }),
-      // Map portable template fields to SMS.ir's templateId and named parameters here.
-    },
-  ],
-  circuitBreaker: { failureThreshold: 3, cooldownMs: 30_000 },
+	strategy: new PriorityRoutingStrategy(), // Or new WeightedRoundRobinStrategy()
+	providers: [
+		{
+			name: "kavenegar",
+			priority: 1,
+			sendMessage: (message) => kavenegar.sendMessage(message),
+			sendTemplate: (message) => kavenegar.sendTemplate(message),
+			sendBulk: (message) => kavenegar.sendBulk(message),
+		},
+		{
+			name: "sms.ir",
+			priority: 2,
+			weight: 2,
+			sendMessage: (message) =>
+				smsIr.sendMessage({
+					recipient: message.recipient,
+					message: message.message,
+					sendAt: message.sendAt,
+					signal: message.signal,
+				}),
+			// Map portable template fields to SMS.ir's templateId and named parameters here.
+		},
+	],
+	circuitBreaker: { failureThreshold: 3, cooldownMs: 30_000 },
 });
 
 await pool.sendMessage({ recipient: "09121234567", message: "Your order is ready." });
